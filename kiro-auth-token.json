@@ -1,0 +1,8 @@
+{
+  "accessToken": "aoaAAAAAGlSivwnfDDOiRXM7BY5QLY2maJQpXysu2iYEhcXbtW3clJJ_CBddRzIXFi5JtUTFwCHjHdShZqF2mIGrQBkc0:MGQCMEPLx7AqmHLsyjDWEJ4WGh9ZL5Gkr+rlx9A70blgu6oUcSAoRJ6wAY0O4wRJseAp6QIwIk2x6dmUjpTSJ1HyPGfYYS1E358/SCKyw2UtBYbv7UXlVT+mc7DqaZTSI1maMzYC",
+  "refreshToken": "aorAAAAAGnJI-sdsUj88TKpaxfSc-o-GPtFYAtvT-rHz5cPgC3RLLcHZ94elGjhwQdd6mhnrJgIMXdPYOfMK7C_UgBkc0:MGUCMQDrKsbvn+7/8/LFoZO2hp8egVoi1mL6+clG7CXFkQEy/yKZBidNCWSYflOwH54DcdICMEPlboStiBKWuU1dteC+gDcMpoRc1MgDfsVLW7HpsDNN69lO9KfOabEeCbCBN/FL5A",
+  "profileArn": "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK",
+  "expiresAt": "2025-12-22T10:45:37.913Z",
+  "authMethod": "social",
+  "provider": "Github"
+}
