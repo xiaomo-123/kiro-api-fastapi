@@ -42,11 +42,11 @@ export function initProxyForm() {
 
         // 验证必填字段
         if (!proxy_type || proxy_type.trim() === '') {
-            alert('代理类型不能为空');
+            showError('代理类型不能为空');
             return;
         }
         if (!proxy_url || proxy_url.trim() === '') {
-            alert('代理URL不能为空');
+            showError('代理URL不能为空');
             return;
         }
 
@@ -119,6 +119,8 @@ export async function editProxy(id) {
     }
 }
 
+window.editProxy = editProxy;
+
 export async function deleteProxy(id) {
     if (!confirm('确定要删除此代理吗？')) {
         return;
@@ -141,3 +143,5 @@ export async function deleteProxy(id) {
         showError('删除失败');
     }
 }
+
+window.deleteProxy = deleteProxy;

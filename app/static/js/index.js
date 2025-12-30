@@ -104,7 +104,7 @@ async function loadUsers() {
         });
     } catch (error) {
         console.error('加载用户列表失败:', error);
-        alert('加载用户列表失败');
+        showError('加载用户列表失败');
     }
 }
 
@@ -132,7 +132,7 @@ function initUserForm() {
             } else {
                 // 创建用户
                 if (!password) {
-                    alert('请输入密码');
+                    showError('请输入密码');
                     return;
                 }
                 response = await fetch('/api/management/users', {
@@ -147,14 +147,14 @@ function initUserForm() {
             if (response.ok) {
                 closeModal('users');
                 loadUsers();
-                alert('操作成功');
+                showSuccess('操作成功');
             } else {
                 const data = await response.json();
-                alert(data.detail || '操作失败');
+                showError(data.detail || '操作失败');
             }
         } catch (error) {
             console.error('操作失败:', error);
-            alert('操作失败');
+            showError('操作失败');
         }
     });
 }
@@ -174,7 +174,7 @@ async function editUser(id) {
         document.getElementById('modal-users').classList.add('active');
     } catch (error) {
         console.error('加载用户信息失败:', error);
-        alert('加载用户信息失败');
+        showError('加载用户信息失败');
     }
 }
 
@@ -190,14 +190,14 @@ async function deleteUser(id) {
 
         if (response.ok) {
             loadUsers();
-            alert('删除成功');
+            showSuccess('删除成功');
         } else {
             const data = await response.json();
-            alert(data.detail || '删除失败');
+            showError(data.detail || '删除失败');
         }
     } catch (error) {
         console.error('删除失败:', error);
-        alert('删除失败');
+        showError('删除失败');
     }
 }
 
@@ -212,9 +212,12 @@ async function loadAccounts() {
 
         accounts.forEach(account => {
             const tr = document.createElement('tr');
+            const displayAccount = account.account.length > 50 
+                ? account.account.substring(0, 50) + '...' 
+                : account.account;
             tr.innerHTML = `
                 <td>${account.id}</td>
-                <td>${account.account}</td>
+                <td class="account-cell" title="${account.account}">${displayAccount}</td>
                 <td>${account.status === 'active' ? '启用' : '禁用'}</td>
                 <td>${account.description || ''}</td>
                 <td>
@@ -226,7 +229,7 @@ async function loadAccounts() {
         });
     } catch (error) {
         console.error('加载账号列表失败:', error);
-        alert('加载账号列表失败');
+        showError('加载账号列表失败');
     }
 }
 
@@ -265,14 +268,14 @@ function initAccountForm() {
             if (response.ok) {
                 closeModal('accounts');
                 loadAccounts();
-                alert('操作成功');
+                showSuccess('操作成功');
             } else {
                 const data = await response.json();
-                alert(data.detail || '操作失败');
+                showError(data.detail || '操作失败');
             }
         } catch (error) {
             console.error('操作失败:', error);
-            alert('操作失败');
+            showError('操作失败');
         }
     });
 }
@@ -303,7 +306,7 @@ async function loadApiKeys() {
         });
     } catch (error) {
         console.error('加载API Key列表失败:', error);
-        alert('加载API Key列表失败');
+        showError('加载API Key列表失败');
     }
 }
 
@@ -341,14 +344,14 @@ function initApiKeyForm() {
             if (response.ok) {
                 closeModal('apikeys');
                 loadApiKeys();
-                alert('操作成功');
+                showSuccess('操作成功');
             } else {
                 const data = await response.json();
-                alert(data.detail || '操作失败');
+                showError(data.detail || '操作失败');
             }
         } catch (error) {
             console.error('操作失败:', error);
-            alert('操作失败');
+            showError('操作失败');
         }
     });
 }
@@ -367,7 +370,7 @@ async function editApiKey(id) {
         document.getElementById('modal-apikeys').classList.add('active');
     } catch (error) {
         console.error('加载API Key信息失败:', error);
-        alert('加载API Key信息失败');
+        showError('加载API Key信息失败');
     }
 }
 
@@ -383,14 +386,14 @@ async function deleteApiKey(id) {
 
         if (response.ok) {
             loadApiKeys();
-            alert('删除成功');
+            showSuccess('删除成功');
         } else {
             const data = await response.json();
-            alert(data.detail || '删除失败');
+            showError(data.detail || '删除失败');
         }
     } catch (error) {
         console.error('删除失败:', error);
-        alert('删除失败');
+        showError('删除失败');
     }
 }
 
@@ -420,7 +423,7 @@ async function loadProxies() {
         });
     } catch (error) {
         console.error('加载代理列表失败:', error);
-        alert('加载代理列表失败');
+        showError('加载代理列表失败');
     }
 }
 
@@ -473,14 +476,14 @@ function initProxyForm() {
             if (response.ok) {
                 closeModal('proxies');
                 loadProxies();
-                alert('操作成功');
+                showSuccess('操作成功');
             } else {
                 const data = await response.json();
-                alert(data.detail || '操作失败');
+                showError(data.detail || '操作失败');
             }
         } catch (error) {
             console.error('操作失败:', error);
-            alert('操作失败');
+            showError('操作失败');
         }
     });
 }
@@ -501,7 +504,7 @@ async function editProxy(id) {
         document.getElementById('modal-proxies').classList.add('active');
     } catch (error) {
         console.error('加载代理信息失败:', error);
-        alert('加载代理信息失败');
+        showError('加载代理信息失败');
     }
 }
 
@@ -517,13 +520,13 @@ async function deleteProxy(id) {
 
         if (response.ok) {
             loadProxies();
-            alert('删除成功');
+            showSuccess('删除成功');
         } else {
             const data = await response.json();
-            alert(data.detail || '删除失败');
+            showError(data.detail || '删除失败');
         }
     } catch (error) {
         console.error('删除失败:', error);
-        alert('删除失败');
+        showError('删除失败');
     }
 }

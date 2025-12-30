@@ -37,7 +37,7 @@ export function initApiKeyForm() {
 
         // 验证API Key字段
         if (!api_key || api_key.trim() === '') {
-            alert('API Key不能为空');
+            showError('API Key不能为空');
             return;
         }
 
@@ -96,6 +96,8 @@ export async function editApiKey(id) {
     }
 }
 
+window.editApiKey = editApiKey;
+
 export async function deleteApiKey(id) {
     if (!confirm('确定要删除此API Key吗？')) {
         return;
@@ -118,3 +120,5 @@ export async function deleteApiKey(id) {
         showError('删除失败');
     }
 }
+
+window.deleteApiKey = deleteApiKey;

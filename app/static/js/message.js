@@ -41,3 +41,10 @@ export function showWarning(message, duration) {
 export function showInfo(message, duration) {
     showMessage(message, 'info', duration);
 }
+
+// 暴露到全局作用域
+window.showMessage = showMessage;
+window.showSuccess = showSuccess;
+window.showError = showError;
+window.showWarning = showWarning;
+window.showInfo = showInfo;
