@@ -13,6 +13,7 @@ export async function loadApiKeys() {
                 <td>${apikey.id}</td>
                 <td>${apikey.api_key}</td>
                 <td>${apikey.description || ''}</td>
+                <td>${apikey.status === '1' ? '启用' : '禁用'}</td>
                 <td>
                     <button class="btn-edit" onclick="editApiKey(${apikey.id})">编辑</button>
                     <button class="btn-delete" onclick="deleteApiKey(${apikey.id})">删除</button>
@@ -34,6 +35,7 @@ export function initApiKeyForm() {
         const id = document.getElementById('apikeys-id').value;
         const api_key = document.getElementById('apikeys-api_key').value;
         const description = document.getElementById('apikeys-description').value;
+        const status = document.getElementById('apikeys-status').value;
 
         // 验证API Key字段
         if (!api_key || api_key.trim() === '') {
@@ -50,7 +52,7 @@ export function initApiKeyForm() {
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ description })
+                    body: JSON.stringify({ description, status })
                 });
             } else {
                 // 创建API Key
@@ -59,7 +61,7 @@ export function initApiKeyForm() {
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ api_key: api_key.trim(), description })
+                    body: JSON.stringify({ api_key: api_key.trim(), description, status })
                 });
             }
 
@@ -87,6 +89,7 @@ export async function editApiKey(id) {
         document.getElementById('apikeys-api_key').value = apikey.api_key;
         document.getElementById('apikeys-api_key').disabled = true;
         document.getElementById('apikeys-description').value = apikey.description || '';
+        document.getElementById('apikeys-status').value = apikey.status || '1';
 
         document.getElementById('modal-apikeys-title').textContent = '编辑API Key';
         document.getElementById('modal-apikeys').classList.add('active');

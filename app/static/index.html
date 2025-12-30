@@ -422,6 +422,7 @@
                                 <th>ID</th>
                                 <th>API Key</th>
                                 <th>描述</th>
+                                <th>状态</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -445,6 +446,7 @@
                                 <th>URL</th>
                                 <th>端口</th>
                                 <th>用户名</th>
+                                <th>状态</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -498,8 +500,8 @@
                 <div class="form-group">
                     <label for="accounts-status">状态</label>
                     <select id="accounts-status">
-                        <option value="active">启用</option>
-                        <option value="inactive">禁用</option>
+                        <option value="1">启用</option>
+                        <option value="0">禁用</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -529,6 +531,13 @@
                 <div class="form-group">
                     <label for="apikeys-description">描述</label>
                     <textarea id="apikeys-description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="apikeys-status">状态</label>
+                    <select id="apikeys-status">
+                        <option value="1">启用</option>
+                        <option value="0">禁用</option>
+                    </select>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-cancel" onclick="closeModal('apikeys')">取消</button>
@@ -569,6 +578,13 @@
                 <div class="form-group">
                     <label for="proxies-password">密码</label>
                     <input type="password" id="proxies-password">
+                </div>
+                <div class="form-group">
+                    <label for="proxies-status">状态</label>
+                    <select id="proxies-status">
+                        <option value="1">启用</option>
+                        <option value="0">禁用</option>
+                    </select>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-cancel" onclick="closeModal('proxies')">取消</button>

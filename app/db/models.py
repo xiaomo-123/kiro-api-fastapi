@@ -21,7 +21,7 @@ class Account(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     account = Column(Text, nullable=False)
-    status = Column(String(20), nullable=False, default='active')
+    status = Column(String(20), nullable=False, default='1')
     description = Column(String(255))
 
 
@@ -32,6 +32,7 @@ class ApiKey(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     api_key = Column(String(255), unique=True, nullable=False)
     description = Column(String(255))
+    status = Column(String(20), nullable=False, default='1')
 
 
 class Proxy(Base):
@@ -44,3 +45,4 @@ class Proxy(Base):
     proxy_port = Column(Integer)
     username = Column(String(100))
     password = Column(String(255))
+    status = Column(String(20), nullable=False, default='1')

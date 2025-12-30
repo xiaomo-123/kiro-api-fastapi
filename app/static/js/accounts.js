@@ -16,7 +16,7 @@ export async function loadAccounts() {
                 <td><input type="checkbox" class="account-checkbox" data-id="${account.id}" /></td>
                 <td>${account.id}</td>
                 <td class="account-cell" title="${account.account}">${displayAccount}</td>
-                <td>${account.status === 'active' ? '启用' : '禁用'}</td>
+                <td>${account.status === '1' ? '启用' : '禁用'}</td>
                 <td>${account.description || ''}</td>
                 <td>
                     <button class="btn-edit" onclick="editAccount(${account.id})">编辑</button>

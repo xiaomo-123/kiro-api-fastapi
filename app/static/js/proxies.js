@@ -15,6 +15,7 @@ export async function loadProxies() {
                 <td>${proxy.proxy_url}</td>
                 <td>${proxy.proxy_port || ''}</td>
                 <td>${proxy.username || ''}</td>
+                <td>${proxy.status === '1' ? '启用' : '禁用'}</td>
                 <td>
                     <button class="btn-edit" onclick="editProxy(${proxy.id})">编辑</button>
                     <button class="btn-delete" onclick="deleteProxy(${proxy.id})">删除</button>
@@ -39,6 +40,7 @@ export function initProxyForm() {
         const proxy_port = document.getElementById('proxies-proxy_port').value;
         const username = document.getElementById('proxies-username').value;
         const password = document.getElementById('proxies-password').value;
+        const status = document.getElementById('proxies-status').value;
 
         // 验证必填字段
         if (!proxy_type || proxy_type.trim() === '') {
@@ -64,7 +66,8 @@ export function initProxyForm() {
                         proxy_url, 
                         proxy_port: proxy_port ? parseInt(proxy_port) : null,
                         username, 
-                        password 
+                        password,
+                        status 
                     })
                 });
             } else {
@@ -79,7 +82,8 @@ export function initProxyForm() {
                         proxy_url, 
                         proxy_port: proxy_port ? parseInt(proxy_port) : null,
                         username, 
-                        password 
+                        password,
+                        status 
                     })
                 });
             }
@@ -110,6 +114,7 @@ export async function editProxy(id) {
         document.getElementById('proxies-proxy_port').value = proxy.proxy_port || '';
         document.getElementById('proxies-username').value = proxy.username || '';
         document.getElementById('proxies-password').value = proxy.password || '';
+        document.getElementById('proxies-status').value = proxy.status || '1';
 
         document.getElementById('modal-proxies-title').textContent = '编辑代理';
         document.getElementById('modal-proxies').classList.add('active');

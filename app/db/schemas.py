@@ -32,7 +32,7 @@ class UserLogin(BaseModel):
 # 账号管理相关模型
 class AccountBase(BaseModel):
     account: str = Field(..., min_length=1)
-    status: str = Field(default='active')
+    status: str = Field(default='1')
     description: Optional[str] = None
 
 
@@ -61,6 +61,7 @@ class AccountBatchDelete(BaseModel):
 class ApiKeyBase(BaseModel):
     api_key: str = Field(..., min_length=1)
     description: Optional[str] = None
+    status: str = Field(default='1')
 
 
 class ApiKeyCreate(ApiKeyBase):
@@ -69,6 +70,7 @@ class ApiKeyCreate(ApiKeyBase):
 
 class ApiKeyUpdate(BaseModel):
     description: Optional[str] = None
+    status: Optional[str] = None
 
 
 class ApiKeyResponse(ApiKeyBase):
@@ -85,6 +87,7 @@ class ProxyBase(BaseModel):
     proxy_port: Optional[int] = None
     username: Optional[str] = None
     password: Optional[str] = None
+    status: str = Field(default='1')
 
 
 class ProxyCreate(ProxyBase):
@@ -97,6 +100,7 @@ class ProxyUpdate(BaseModel):
     proxy_port: Optional[int] = None
     username: Optional[str] = None
     password: Optional[str] = None
+    status: Optional[str] = None
 
 
 class ProxyResponse(ProxyBase):

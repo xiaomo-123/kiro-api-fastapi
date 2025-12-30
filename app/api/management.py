@@ -225,7 +225,7 @@ async def import_accounts(accounts: List[dict], db: Session = Depends(get_db)):
 
             db_account = Account(
                 account=account_str,
-                status='active',
+                status='1',
                 description=f'导入自JSON - 第{idx}条'
             )
             db.add(db_account)
@@ -257,7 +257,8 @@ async def create_apikey(apikey: ApiKeyCreate, db: Session = Depends(get_db)):
 
     db_apikey = ApiKey(
         api_key=apikey.api_key,
-        description=apikey.description
+        description=apikey.description,
+        status=apikey.status
     )
     db.add(db_apikey)
     db.commit()
@@ -296,6 +297,8 @@ async def update_apikey(apikey_id: int, apikey_update: ApiKeyUpdate, db: Session
 
     if apikey_update.description is not None:
         apikey.description = apikey_update.description
+    if apikey_update.status is not None:
+        apikey.status = apikey_update.status
 
     db.commit()
     db.refresh(apikey)
@@ -326,7 +329,8 @@ async def create_proxy(proxy: ProxyCreate, db: Session = Depends(get_db)):
         proxy_url=proxy.proxy_url,
         proxy_port=proxy.proxy_port,
         username=proxy.username,
-        password=proxy.password
+        password=proxy.password,
+        status=proxy.status
     )
     db.add(db_proxy)
     db.commit()
@@ -373,6 +377,8 @@ async def update_proxy(proxy_id: int, proxy_update: ProxyUpdate, db: Session = D
         proxy.username = proxy_update.username
     if proxy_update.password is not None:
         proxy.password = proxy_update.password
+    if proxy_update.status is not None:
+        proxy.status = proxy_update.status
 
     db.commit()
     db.refresh(proxy)
