@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     # 服务器配置
     HOST: str = "0.0.0.0"
-    SERVER_PORT: int = 3000
+    SERVER_PORT: int = 5431
     REQUIRED_API_KEY: str = "123456"
 
     # 代理配置

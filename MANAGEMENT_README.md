@@ -81,7 +81,7 @@ uvicorn main:app --reload
 启动后，通过浏览器访问：
 
 ```
-http://localhost:3001/static/login.html
+http://localhost:5431/static/login.html
 ```
 
 ## API接口

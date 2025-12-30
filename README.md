@@ -41,7 +41,7 @@ kiro-api-fastapi/
 ```env
 # 服务器配置
 HOST=0.0.0.0
-SERVER_PORT=3000
+SERVER_PORT=5431
 REQUIRED_API_KEY=your_api_key_here
 
 # 代理配置
@@ -79,7 +79,7 @@ python main.py
 或使用 uvicorn：
 
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 3000
+uvicorn main:app --host 0.0.0.0 --port 5431
 ```
 
 ## 接口测试
@@ -87,7 +87,7 @@ uvicorn main:app --host 0.0.0.0 --port 3000
 ### 非流式请求
 
 ```bash
-curl -X POST http://localhost:3000/claude-kiro-oauth/v1/messages   -H "Content-Type: application/json"   -H "Authorization: Bearer your_api_key"   -d '{
+curl -X POST http://localhost:5431/claude-kiro-oauth/v1/messages   -H "Content-Type: application/json"   -H "Authorization: Bearer your_api_key"   -d '{
     "model": "claude-sonnet-4-5",
     "max_tokens": 4096,
     "messages": [
@@ -99,7 +99,7 @@ curl -X POST http://localhost:3000/claude-kiro-oauth/v1/messages   -H "Content-T
 ### 流式请求
 
 ```bash
-curl -X POST http://localhost:3000/claude-kiro-oauth/v1/messages   -H "Content-Type: application/json"   -H "Authorization: Bearer your_api_key"   -d '{
+curl -X POST http://localhost:5431/claude-kiro-oauth/v1/messages   -H "Content-Type: application/json"   -H "Authorization: Bearer your_api_key"   -d '{
     "model": "claude-sonnet-4-5",
     "max_tokens": 4096,
     "stream": true,
@@ -112,14 +112,14 @@ curl -X POST http://localhost:3000/claude-kiro-oauth/v1/messages   -H "Content-T
 ### 健康检查
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:5431/health
 ```
 
 ## API 文档
 
 启动服务后访问：
 - Swagger UI: http://localhost:3001/docs
-- ReDoc: http://localhost:3000/redoc
+- ReDoc: http://localhost:5431/redoc
 
 ## 一致性校验清单
 
