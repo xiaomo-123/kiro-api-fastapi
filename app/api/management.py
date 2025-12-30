@@ -112,15 +112,55 @@ async def delete_user(user_id: int, db: Session = Depends(get_db)):
 @router.post("/accounts", response_model=AccountResponse)
 async def create_account(account: AccountCreate, db: Session = Depends(get_db)):
     """创建账号"""
-    db_account = Account(
-        account=account.account,
-        status=account.status,
-        description=account.description
-    )
-    db.add(db_account)
-    db.commit()
-    db.refresh(db_account)
-    return db_account
+    try:
+        # 验证account字段是否为有效的JSON
+        import json
+        account_data = json.loads(account.account)
+        
+        # 验证必需字段
+        required_fields = ['accessToken', 'refreshToken', 'profileArn']
+        optional_fields = ['clientId', 'clientSecret']
+        missing_fields = [field for field in required_fields if field not in account_data]
+        if missing_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"账号数据缺少必需字段: {missing_fields}"
+            )
+        
+        # 验证expiresAt字段（如果存在）
+        if 'expiresAt' in account_data:
+            try:
+                from datetime import datetime
+                datetime.fromisoformat(account_data['expiresAt'].replace('Z', '+00:00'))
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="expiresAt字段格式无效，应为ISO 8601格式"
+                )
+        
+        # 创建账号
+        db_account = Account(
+            account=account.account,
+            status=account.status,
+            description=account.description
+        )
+        db.add(db_account)
+        db.commit()
+        db.refresh(db_account)
+        return db_account
+    
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"账号数据必须是有效的JSON格式: {str(e)}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"创建账号失败: {str(e)}"
+        )
 
 
 @router.get("/accounts", response_model=List[AccountResponse])
@@ -151,8 +191,48 @@ async def update_account(account_id: int, account_update: AccountUpdate, db: Ses
             status_code=status.HTTP_404_NOT_FOUND,
             detail="账号不存在"
         )    
+    # 如果更新account字段，验证JSON格式
     if account_update.account is not None:
-        account.account = account_update.account
+        try:
+            import json
+            account_data = json.loads(account_update.account)
+            
+            # 验证必需字段
+            required_fields = ['accessToken', 'refreshToken', 'profileArn']
+            optional_fields = ['clientId', 'clientSecret']
+            missing_fields = [field for field in required_fields if field not in account_data]
+            if missing_fields:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"账号数据缺少必需字段: {missing_fields}"
+                )
+            
+            # 验证expiresAt字段（如果存在）
+            if 'expiresAt' in account_data:
+                try:
+                    from datetime import datetime
+                    datetime.fromisoformat(account_data['expiresAt'].replace('Z', '+00:00'))
+                except Exception:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="expiresAt字段格式无效，应为ISO 8601格式"
+                    )
+            
+            account.account = account_update.account
+        
+        except json.JSONDecodeError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"账号数据必须是有效的JSON格式: {str(e)}"
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"更新账号失败: {str(e)}"
+            )
+    
     if account_update.status is not None:
         account.status = account_update.status
     if account_update.description is not None:

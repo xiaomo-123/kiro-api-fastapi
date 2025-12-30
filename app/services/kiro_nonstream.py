@@ -378,6 +378,18 @@ class KiroNonStreamService(KiroBaseService):
                     logger.info('[Kiro] Received 403. Attempting token refresh and retrying...')
                     await self._ensure_token(force_refresh=True)
                     return await self._call_api(method, model, body, True, retry_count)
+                
+                # 如果收到403错误且已经刷新过令牌，禁用当前账号并切换到下一个账号
+                if response.status == 403 and is_retry:
+                    logger.warning('[Kiro] Received 403 after token refresh. Disabling current account and switching...')
+                    # 禁用当前账号
+                    self._disable_current_account()
+                    # 切换到下一个账号
+                    switched = await self._switch_to_next_account()
+                    if switched:
+                        # 切换账号后重新尝试
+                        await self._ensure_token(force_refresh=True)
+                        return await self._call_api(method, model, body, False, retry_count)
 
                 if response.status == 429 and retry_count < max_retries:
                     delay = base_delay * (2 ** retry_count)

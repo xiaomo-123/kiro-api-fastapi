@@ -15,7 +15,7 @@ from ..utils import (
     get_content_text
 )
 from ..db.database import get_db
-from ..db.models import Proxy
+from ..db.models import Proxy, Account
 
 logger = logging.getLogger(__name__)
 
@@ -63,31 +63,14 @@ class KiroBaseService:
         self.machine_id: Optional[str] = None
         self.session: Optional[aiohttp.ClientSession] = None
         self.proxy: Optional[str] = None
+        
+        # 账号管理相关属性
+        self.accounts_cache: List[Dict] = []  # 缓存所有可用账号
+        self.current_account_index: int = 0  # 当前使用的账号索引
+        self.account_lock = asyncio.Lock()  # 账号切换锁
 
-        # 初始化凭证
-        self._init_credentials()
-
-    def _init_credentials(self):
-        """初始化凭证"""
-        # 优先使用 Base64 编码的凭证
-        if settings.KIRO_OAUTH_CREDS_BASE64:
-            try:
-                import base64
-                decoded_creds = base64.b64decode(settings.KIRO_OAUTH_CREDS_BASE64).decode('utf-8')
-                creds = json.loads(decoded_creds)
-                self._load_creds_from_dict(creds)
-                logger.info('[Kiro] Successfully loaded Base64 credentials')
-            except Exception as e:
-                logger.error(f'[Kiro] Failed to load Base64 credentials: {e}')
-
-        # 其次使用凭证文件
-        elif settings.KIRO_OAUTH_CREDS_FILE_PATH:
-            creds = load_json_file(settings.KIRO_OAUTH_CREDS_FILE_PATH)
-            if creds:
-                self._load_creds_from_dict(creds)
-                logger.info(f'[Kiro] Successfully loaded credentials from file: {settings.KIRO_OAUTH_CREDS_FILE_PATH}')
-
-        # 生成机器ID
+    def _generate_machine_id(self):
+        """生成机器ID"""
         creds_dict = {
             'uuid': getattr(settings, 'uuid', None),
             'profileArn': self.profile_arn,
@@ -113,6 +96,189 @@ class KiroBaseService:
 
         # 设置认证方法
         self.auth_method = creds.get('authMethod', KIRO_CONSTANTS['AUTH_METHOD_SOCIAL'])
+
+    def _load_accounts_from_db(self) -> List[Dict]:
+        """从数据库加载所有状态为1的账号"""
+        try:
+            db = next(get_db())
+            try:
+                # 获取所有状态为1的账号
+                accounts = db.query(Account).filter(Account.status == '1').all()
+                
+                if not accounts:
+                    logger.warning('[Kiro] No accounts with status=1 found in database')
+                    return []
+                
+                # 解析账号数据
+                accounts_list = []
+                for acc in accounts:
+                    try:
+                        # account字段存储的是JSON字符串，需要解析
+                        if not acc.account or not acc.account.strip():
+                            logger.error(f'[Kiro] Account {acc.id} has empty account data')
+                            continue
+                        
+                        # 尝试解析JSON，支持单引号和双引号
+                        account_str = acc.account.strip()
+                        try:
+                            # 首先尝试标准JSON解析
+                            account_data = json.loads(account_str)
+                        except json.JSONDecodeError:
+                            # 如果失败，尝试使用ast.literal_eval解析（支持单引号）
+                            import ast
+                            try:
+                                account_data = ast.literal_eval(account_str)
+                            except (ValueError, SyntaxError) as e:
+                                logger.error(f'[Kiro] Account {acc.id} failed to parse with both json and ast: {e}')
+                                raise
+                        account_data['id'] = acc.id
+                        account_data['description'] = acc.description
+                        
+                        # 验证必需字段
+                        required_fields = ['accessToken', 'refreshToken', 'profileArn']
+                        optional_fields = ['clientId', 'clientSecret']
+                        missing_fields = [field for field in required_fields if field not in account_data]
+                        if missing_fields:
+                            logger.error(f'[Kiro] Account {acc.id} (description: {acc.description}) missing required fields: {missing_fields}')
+                            logger.error(f'[Kiro] Account {acc.id} available fields: {list(account_data.keys())}')
+                            continue
+                        
+                        # 记录缺少的可选字段
+                        missing_optional = [field for field in optional_fields if field not in account_data]
+                        if missing_optional:
+                            logger.warning(f'[Kiro] Account {acc.id} (description: {acc.description}) missing optional fields: {missing_optional}')
+                        
+                        # 验证expiresAt字段（如果存在）
+                        if 'expiresAt' in account_data:
+                            try:
+                                datetime.fromisoformat(account_data['expiresAt'].replace('Z', '+00:00'))
+                            except Exception as e:
+                                logger.warning(f'[Kiro] Account {acc.id} has invalid expiresAt: {e}')
+                        
+                        accounts_list.append(account_data)
+                        logger.info(f'[Kiro] Successfully loaded account {acc.id}: {acc.description}')
+                    except json.JSONDecodeError as e:
+                        logger.error(f'[Kiro] Failed to parse account {acc.id} (description: {acc.description}): {e}')
+                        logger.error(f'[Kiro] Account {acc.id} raw data: {acc.account[:200] if acc.account else "None"}...')
+                        continue
+                    except Exception as e:
+                        logger.error(f'[Kiro] Unexpected error processing account {acc.id}: {e}')
+                        continue
+                
+                self.accounts_cache = accounts_list
+                logger.info(f'[Kiro] Loaded {len(accounts_list)} valid accounts from database')
+                return accounts_list
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f'[Kiro] Failed to load accounts from database: {e}')
+            return []
+
+    async def _switch_to_next_account(self) -> bool:
+        """切换到下一个可用账号"""
+        async with self.account_lock:
+            if not self.accounts_cache:
+                logger.warning('[Kiro] No accounts available for switching')
+                return False
+            
+            # 保存当前索引
+            old_index = self.current_account_index
+            
+            # 尝试切换到下一个账号
+            for _ in range(len(self.accounts_cache)):
+                self.current_account_index = (self.current_account_index + 1) % len(self.accounts_cache)
+                account = self.accounts_cache[self.current_account_index]
+                
+                logger.info(f'[Kiro] Switching from account {old_index} to {self.current_account_index}: {account.get("description", "N/A")}')
+                
+                # 加载新账号的凭证
+                self._load_creds_from_dict(account)
+                
+                # 重新生成机器ID
+                creds_dict = {
+                    'uuid': getattr(settings, 'uuid', None),
+                    'profileArn': self.profile_arn,
+                    'clientId': self.client_id
+                }
+                self.machine_id = generate_machine_id(creds_dict)
+                
+                # 重置令牌过期状态
+                self.expires_at = None
+                
+                return True
+            
+            return False
+
+    async def _get_current_account(self) -> Optional[Dict]:
+        """获取当前使用的账号"""
+        if not self.accounts_cache or self.current_account_index >= len(self.accounts_cache):
+            return None
+        return self.accounts_cache[self.current_account_index]
+
+    async def _refresh_accounts_cache(self) -> bool:
+        """刷新账号缓存，从数据库重新加载所有状态为1的账号"""
+        try:
+            async with self.account_lock:
+                accounts = self._load_accounts_from_db()
+                if not accounts:
+                    logger.warning('[Kiro] No active accounts found in database after refresh')
+                    return False
+                
+                # 保存当前账号的ID
+                current_account = None
+                if self.accounts_cache and self.current_account_index < len(self.accounts_cache):
+                    current_account = self.accounts_cache[self.current_account_index]
+                
+                # 更新账号缓存
+                self.accounts_cache = accounts
+                
+                # 如果之前有账号，尝试找到相同ID的账号并保持索引
+                if current_account:
+                    for i, acc in enumerate(accounts):
+                        if acc.get('id') == current_account.get('id'):
+                            self.current_account_index = i
+                            logger.info(f'[Kiro] Account cache refreshed. Current account index: {i}')
+                            return True
+                
+                # 如果没有找到之前的账号，使用第一个账号
+                self.current_account_index = 0
+                self._load_creds_from_dict(accounts[0])
+                logger.info(f'[Kiro] Account cache refreshed. Reset to first account: {accounts[0].get("description", "N/A")}')
+                return True
+        except Exception as e:
+            logger.error(f'[Kiro] Failed to refresh accounts cache: {e}')
+            return False
+
+    def _disable_current_account(self) -> bool:
+        """将当前账号的状态设置为0（禁用）"""
+        try:
+            current_account = self._get_current_account()
+            if not current_account:
+                logger.warning('[Kiro] No current account to disable')
+                return False
+            
+            account_id = current_account.get('id')
+            if not account_id:
+                logger.warning('[Kiro] Current account has no ID')
+                return False
+            
+            db = next(get_db())
+            try:
+                # 更新账号状态为0
+                account = db.query(Account).filter(Account.id == account_id).first()
+                if account:
+                    account.status = '0'
+                    db.commit()
+                    logger.info(f'[Kiro] Disabled account {account_id}: {current_account.get("description", "N/A")}')
+                    return True
+                else:
+                    logger.warning(f'[Kiro] Account {account_id} not found in database')
+                    return False
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f'[Kiro] Failed to disable account: {e}')
+            return False
 
     def _load_proxy_from_db(self) -> Optional[str]:
         """从数据库加载代理配置"""
@@ -158,6 +324,27 @@ class KiroBaseService:
         else:
             logger.info('[Kiro] No proxy configured, using direct connection')
             print('[Kiro Proxy] No proxy, using direct connection')
+
+        # 从数据库加载账号
+        accounts = self._load_accounts_from_db()
+        if not accounts:
+            error_msg = 'No active accounts found in database. Please add accounts to the database before starting the service.'
+            logger.error(f'[Kiro] {error_msg}')
+            raise ValueError(error_msg)
+        
+        # 使用第一个账号
+        self.current_account_index = 0
+        self._load_creds_from_dict(accounts[0])
+        logger.info(f'[Kiro] Using account {0}: {accounts[0].get("description", "N/A")}')
+
+        # 检查是否有refresh_token
+        if not self.refresh_token:
+            error_msg = 'No refresh token available after loading credentials'
+            logger.error(f'[Kiro] {error_msg}')
+            raise ValueError(error_msg)
+        
+        # 生成机器ID
+        self._generate_machine_id()
 
         await self._ensure_token()
 
