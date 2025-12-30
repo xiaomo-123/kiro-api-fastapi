@@ -14,6 +14,8 @@ from ..utils import (
     get_system_runtime_info,
     get_content_text
 )
+from ..db.database import get_db
+from ..db.models import Proxy
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +62,7 @@ class KiroBaseService:
         self.region = 'us-east-1'
         self.machine_id: Optional[str] = None
         self.session: Optional[aiohttp.ClientSession] = None
+        self.proxy: Optional[str] = None
 
         # 初始化凭证
         self._init_credentials()
@@ -111,6 +114,33 @@ class KiroBaseService:
         # 设置认证方法
         self.auth_method = creds.get('authMethod', KIRO_CONSTANTS['AUTH_METHOD_SOCIAL'])
 
+    def _load_proxy_from_db(self) -> Optional[str]:
+        """从数据库加载代理配置"""
+        try:
+            db = next(get_db())
+            try:
+                # 获取第一条状态为1的代理记录
+                proxy = db.query(Proxy).filter(Proxy.status == '1').first()
+                if proxy:
+                    # 构建完整的代理URL
+                    proxy_url = f"{proxy.proxy_type}://"
+                    if proxy.username and proxy.password:
+                        proxy_url += f"{proxy.username}:{proxy.password}@"
+                    proxy_url += f"{proxy.proxy_url}"
+                    if proxy.proxy_port:
+                        proxy_url += f":{proxy.proxy_port}"
+                    
+                    logger.info(f'[Kiro] Loaded proxy from database: {proxy_url}')
+                    return proxy_url
+                else:
+                    logger.info('[Kiro] No active proxy found in database')
+                    return None
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f'[Kiro] Failed to load proxy from database: {e}')
+            return None
+
     async def initialize(self):
         """初始化服务"""
         if self.is_initialized:
@@ -118,13 +148,13 @@ class KiroBaseService:
 
         logger.info('[Kiro] Initializing Kiro API Service...')
 
+        # 从数据库加载代理
+        self.proxy = self._load_proxy_from_db()
+
         # 打印代理状态
-        if settings.PROXY_SERVER:
-            logger.info(f'[Kiro] Using proxy: {settings.PROXY_SERVER}')
-            print(f'[Kiro Proxy] Proxy enabled: {settings.PROXY_SERVER}')
-        elif settings.USE_SYSTEM_PROXY_KIRO:
-            logger.info('[Kiro] Using system proxy settings')
-            print('[Kiro Proxy] System proxy enabled')
+        if self.proxy:
+            logger.info(f'[Kiro] Using proxy from database: {self.proxy}')
+            print(f'[Kiro Proxy] Proxy enabled: {self.proxy}')
         else:
             logger.info('[Kiro] No proxy configured, using direct connection')
             print('[Kiro Proxy] No proxy, using direct connection')
@@ -141,14 +171,6 @@ class KiroBaseService:
         timeout = aiohttp.ClientTimeout(total=300)  # 5分钟超时
 
         headers = self._build_headers()
-
-        # 准备代理参数
-        proxy = None
-        if settings.PROXY_SERVER:
-            proxy = settings.PROXY_SERVER
-        elif settings.USE_SYSTEM_PROXY_KIRO:
-            # 使用系统代理，不指定具体代理地址
-            proxy = None  # aiohttp 会自动使用系统代理
 
         self.session = aiohttp.ClientSession(
             connector=connector,

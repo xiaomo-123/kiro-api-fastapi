@@ -351,13 +351,10 @@ class KiroStreamService(KiroBaseService):
         request_url = self._get_request_url(model)
 
         try:
-            # 准备代理参数
-            proxy = None
-            if settings.PROXY_SERVER:
-                proxy = settings.PROXY_SERVER
+            # 使用从数据库加载的代理
+            proxy = self.proxy
+            if proxy:
                 logger.info(f'[Kiro Stream] 流式使用代理请求: {proxy}')
-            elif settings.USE_SYSTEM_PROXY_KIRO:
-                logger.info('[Kiro Stream] Using system proxy for request')
 
             async with self.session.post(
                 request_url,
