@@ -11,14 +11,14 @@ services:
       - "5431:5431"
     volumes:
       # 挂载静态文件目录
-      - ./app/static:/app/app/static:rw
+      - ./app/static:/app/app/static
       # 挂载数据库文件，确保可读写
-      - ./kiro_management.db:/app/kiro_management.db:rw
+      - ./kiro_management.db:/app/kiro_management.db
       # 挂载环境变量文件
-      - ./.env:/app/.env:ro
+      - ./.env:/app/.env
     environment:
       - HOST=0.0.0.0
       - SERVER_PORT=5431
       - REQUIRED_API_KEY=123456
     restart: unless-stopped
-    user: "1000:1000"
+    
