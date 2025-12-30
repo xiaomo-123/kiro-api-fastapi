@@ -8,7 +8,7 @@ from ..db.database import get_db
 from ..db.models import User, Account, ApiKey, Proxy
 from ..db.schemas import (
     UserCreate, UserUpdate, UserResponse, UserLogin,
-    AccountCreate, AccountUpdate, AccountResponse,
+    AccountCreate, AccountUpdate, AccountResponse, AccountBatchDelete,
     ApiKeyCreate, ApiKeyUpdate, ApiKeyResponse,
     ProxyCreate, ProxyUpdate, ProxyResponse
 )
@@ -177,6 +177,38 @@ async def delete_account(account_id: int, db: Session = Depends(get_db)):
     db.delete(account)
     db.commit()
     return {"message": "账号删除成功"}
+
+
+@router.post("/accounts/batch-delete")
+async def batch_delete_accounts(request: AccountBatchDelete, db: Session = Depends(get_db)):
+    """批量删除账号"""
+    ids = request.ids
+
+    if not ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请提供要删除的账号ID列表"
+        )
+
+    # 查询要删除的账号
+    accounts = db.query(Account).filter(Account.id.in_(ids)).all()
+
+    if not accounts:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="未找到要删除的账号"
+        )
+
+    # 批量删除
+    for account in accounts:
+        db.delete(account)
+
+    db.commit()
+
+    return {
+        "message": f"成功删除 {len(accounts)} 个账号",
+        "deleted_count": len(accounts)
+    }
 
 
 @router.post("/accounts/import")

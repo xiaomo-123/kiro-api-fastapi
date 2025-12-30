@@ -1,6 +1,6 @@
 # Pydantic模型定义
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
 
 # 用户管理相关模型
@@ -51,6 +51,10 @@ class AccountResponse(AccountBase):
 
     class Config:
         from_attributes = True
+
+
+class AccountBatchDelete(BaseModel):
+    ids: List[int] = Field(..., min_items=1)
 
 
 # API Key管理相关模型

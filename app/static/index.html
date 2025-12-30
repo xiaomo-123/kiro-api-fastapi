@@ -139,6 +139,20 @@
             word-wrap: break-word;
         }
 
+        /* 复选框列样式 */
+        th:first-child, td:first-child {
+            width: 50px;
+            text-align: center;
+            padding: 15px 10px;
+        }
+
+        th:first-child input[type="checkbox"],
+        td:first-child input[type="checkbox"] {
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+        }
+
         th {
             background: #f8f9fa;
             font-weight: 600;
@@ -375,12 +389,14 @@
                         <input type="file" id="import-file" accept=".json" style="display: none;" onchange="importAccounts(this)">
                         <button class="btn-add" onclick="document.getElementById('import-file').click()">导入JSON</button>
                         <button class="btn-add" onclick="openModal('accounts')">添加账号</button>
+                        <button class="btn-delete" onclick="deleteSelectedAccounts()">批量删除</button>
                     </div>
                 </div>
                 <div class="table-container">
                     <table id="accounts-table">
                         <thead>
                             <tr>
+                                <th><input type="checkbox" id="select-all-accounts" onchange="toggleAllAccounts(this)"></th>
                                 <th>ID</th>
                                 <th>账号</th>
                                 <th>状态</th>

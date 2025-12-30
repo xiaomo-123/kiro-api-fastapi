@@ -1,4 +1,6 @@
 // 主页面脚本
+import { loadAccounts } from './accounts.js';
+
 document.addEventListener('DOMContentLoaded', function() {
     // 检查登录状态
     if (localStorage.getItem('isLoggedIn') !== 'true') {
@@ -201,37 +203,7 @@ async function deleteUser(id) {
     }
 }
 
-// 账号管理相关函数
-async function loadAccounts() {
-    try {
-        const response = await fetch('/api/management/accounts');
-        const accounts = await response.json();
 
-        const tbody = document.querySelector('#accounts-table tbody');
-        tbody.innerHTML = '';
-
-        accounts.forEach(account => {
-            const tr = document.createElement('tr');
-            const displayAccount = account.account.length > 50 
-                ? account.account.substring(0, 50) + '...' 
-                : account.account;
-            tr.innerHTML = `
-                <td>${account.id}</td>
-                <td class="account-cell" title="${account.account}">${displayAccount}</td>
-                <td>${account.status === 'active' ? '启用' : '禁用'}</td>
-                <td>${account.description || ''}</td>
-                <td>
-                    <button class="btn-edit" onclick="editAccount(${account.id})">编辑</button>
-                    <button class="btn-delete" onclick="deleteAccount(${account.id})">删除</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    } catch (error) {
-        console.error('加载账号列表失败:', error);
-        showError('加载账号列表失败');
-    }
-}
 
 function initAccountForm() {
     const form = document.getElementById('form-accounts');

@@ -13,6 +13,7 @@ export async function loadAccounts() {
                 ? account.account.substring(0, 50) + '...' 
                 : account.account;
             tr.innerHTML = `
+                <td><input type="checkbox" class="account-checkbox" data-id="${account.id}" /></td>
                 <td>${account.id}</td>
                 <td class="account-cell" title="${account.account}">${displayAccount}</td>
                 <td>${account.status === 'active' ? '启用' : '禁用'}</td>
@@ -24,6 +25,12 @@ export async function loadAccounts() {
             `;
             tbody.appendChild(tr);
         });
+
+        // 重置全选复选框
+        const selectAllCheckbox = document.getElementById('select-all-accounts');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.checked = false;
+        }
     } catch (error) {
         console.error('加载账号列表失败:', error);
         showError('加载账号列表失败');
@@ -127,3 +134,49 @@ export async function deleteAccount(id) {
 }
 
 window.deleteAccount = deleteAccount;
+
+// 全选/取消全选账号
+window.toggleAllAccounts = function(checkbox) {
+    const checkboxes = document.querySelectorAll('.account-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = checkbox.checked;
+    });
+};
+
+// 批量删除账号
+window.deleteSelectedAccounts = async function() {
+    const checkboxes = document.querySelectorAll('.account-checkbox:checked');
+
+    if (checkboxes.length === 0) {
+        showError('请至少选择一个账号');
+        return;
+    }
+
+    if (!confirm(`确定要删除选中的 ${checkboxes.length} 个账号吗？`)) {
+        return;
+    }
+
+    const ids = Array.from(checkboxes).map(cb => parseInt(cb.getAttribute('data-id')));
+
+    try {
+        const response = await fetch('/api/management/accounts/batch-delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ ids })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            showSuccess(result.message);
+            loadAccounts();
+        } else {
+            const data = await response.json();
+            showError(data.detail || '批量删除失败');
+        }
+    } catch (error) {
+        console.error('批量删除失败:', error);
+        showError('批量删除失败');
+    }
+};
