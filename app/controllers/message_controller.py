@@ -26,7 +26,23 @@ class MessageController:
         """处理消息请求"""
         try:
             # 确保服务已初始化
-            await self.kiro_service.initialize()
+            try:
+                await self.kiro_service.initialize()
+            except ValueError as e:
+                # 处理没有可用账号的情况
+                error_msg = str(e)
+                if 'No active accounts' in error_msg or 'No refresh token' in error_msg:
+                    raise HTTPException(
+                        status_code=503,
+                        detail={
+                            'type': 'error',
+                            'error': {
+                                'type': 'service_unavailable',
+                                'message': '服务暂时不可用：没有可用的Kiro账号。请通过管理界面添加账号后再试。'
+                            }
+                        }
+                    )
+                raise
 
             # 记录输入
             log_conversation(

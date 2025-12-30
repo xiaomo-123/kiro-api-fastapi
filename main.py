@@ -35,16 +35,17 @@ async def lifespan(app: FastAPI):
     init_default_user()
     logger.info('Default admin user initialized')
 
-    # 初始化Kiro服务
-    kiro_service = get_kiro_service()
-    await kiro_service.initialize()
-    logger.info('Kiro service initialized')
+    # 注意：Kiro服务将在首次使用时初始化，而不是在启动时
+    # 这样可以避免因为没有可用账号而导致服务无法启动
 
     yield
 
     # 关闭时清理资源
     logger.info('Shutting down application...')
-    await kiro_service.close()
+    # 尝试关闭Kiro服务（如果已初始化）
+    kiro_service = get_kiro_service()
+    if kiro_service.is_initialized:
+        await kiro_service.close()
     logger.info('Application shutdown complete')
 
 
@@ -77,10 +78,16 @@ app.include_router(management_router, prefix="/api/management", tags=["管理"])
 @app.get('/health')
 async def health_check():
     """健康检查接口"""
+    kiro_service = get_kiro_service()
     return {
         'status': 'healthy',
         'timestamp': settings.SERVER_PORT,
-        'provider': 'claude-kiro-oauth'
+        'provider': 'claude-kiro-oauth',
+        'kiro_service': {
+            'initialized': kiro_service.is_initialized,
+            'has_accounts': len(kiro_service.accounts_cache) > 0 if kiro_service.accounts_cache else False,
+            'accounts_count': len(kiro_service.accounts_cache) if kiro_service.accounts_cache else 0
+        }
     }
 
 
