@@ -366,11 +366,6 @@ class KiroNonStreamService(KiroBaseService):
             'amz-sdk-invocation-id': str(uuid.uuid4())
         }
 
-        # 打印请求信息
-        print(f"[Kiro Request] URL: {request_url}")
-        print(f"[Kiro Request] Headers: {json.dumps(headers, indent=2)}")
-        print(f"[Kiro Request] Body: {json.dumps(request_data, indent=2)}")
-
         try:
             # 准备代理参数
             proxy = None
@@ -381,9 +376,6 @@ class KiroNonStreamService(KiroBaseService):
                 logger.info('[Kiro] Using system proxy for request')
 
             async with self.session.post(request_url, json=request_data, headers=headers, proxy=proxy) as response:
-                # 打印响应头
-                print(f"[Kiro Response] Status: {response.status}")
-                print(f"[Kiro Response] Headers: {json.dumps(dict(response.headers), indent=2)}")
 
                 if response.status == 403 and not is_retry:
                     logger.info('[Kiro] Received 403. Attempting token refresh and retrying...')
@@ -412,11 +404,9 @@ class KiroNonStreamService(KiroBaseService):
                 try:
                     # 检查响应头中的Content-Encoding
                     content_encoding = response.headers.get('Content-Encoding', '').lower()
-                    logger.info(f'[Kiro] Content-Encoding: {content_encoding}')
 
                     # 先获取原始字节数据
                     raw_bytes = await response.read()
-                    logger.info(f'[Kiro] Raw response length: {len(raw_bytes)} bytes')
 
                     # 尝试解码为UTF-8字符串
                     try:
@@ -434,9 +424,6 @@ class KiroNonStreamService(KiroBaseService):
                             # AWS Event Stream格式 - 解析二进制协议
                             # 格式: [总长度(4字节)][头部长度(4字节)][头部数据][预签名头部(4字节)][payload]
                             response_text = self._parse_aws_event_stream(raw_bytes)
-
-                    # 打印响应体
-                    print(f"[Kiro Response] Body: {response_text}")
 
                     # 尝试解析JSON
                     try:
