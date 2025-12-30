@@ -371,7 +371,11 @@
             <div id="page-accounts" class="page">
                 <div class="page-header">
                     <h2>账号管理</h2>
-                    <button class="btn-add" onclick="openModal('accounts')">添加账号</button>
+                    <div>
+                        <input type="file" id="import-file" accept=".json" style="display: none;" onchange="importAccounts(this)">
+                        <button class="btn-add" onclick="document.getElementById('import-file').click()">导入JSON</button>
+                        <button class="btn-add" onclick="openModal('accounts')">添加账号</button>
+                    </div>
                 </div>
                 <div class="table-container">
                     <table id="accounts-table">

@@ -179,6 +179,39 @@ async def delete_account(account_id: int, db: Session = Depends(get_db)):
     return {"message": "账号删除成功"}
 
 
+@router.post("/accounts/import")
+async def import_accounts(accounts: List[dict], db: Session = Depends(get_db)):
+    """批量导入账号"""
+    success_count = 0
+    error_count = 0
+    errors = []
+
+    for idx, account_data in enumerate(accounts, 1):
+        try:
+            # 将JSON对象转换为字符串存储
+            account_str = str(account_data)
+
+            db_account = Account(
+                account=account_str,
+                status='active',
+                description=f'导入自JSON - 第{idx}条'
+            )
+            db.add(db_account)
+            db.commit()
+            success_count += 1
+        except Exception as e:
+            error_count += 1
+            errors.append(f"第{idx}条导入失败: {str(e)}")
+            db.rollback()
+
+    return {
+        "message": f"导入完成，成功{success_count}条，失败{error_count}条",
+        "success_count": success_count,
+        "error_count": error_count,
+        "errors": errors
+    }
+
+
 # API Key管理路由
 @router.post("/apikeys", response_model=ApiKeyResponse)
 async def create_apikey(apikey: ApiKeyCreate, db: Session = Depends(get_db)):

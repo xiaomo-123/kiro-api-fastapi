@@ -530,3 +530,56 @@ async function deleteProxy(id) {
         showError('删除失败');
     }
 }
+
+// 导入账号
+window.importAccounts = async function(fileInput) {
+    const file = fileInput.files[0];
+    if (!file) {
+        return;
+    }
+
+    try {
+        // 读取文件内容
+        const content = await file.text();
+        const accounts = JSON.parse(content);
+
+        // 验证是否为数组
+        if (!Array.isArray(accounts)) {
+            showError('JSON文件格式错误：必须是数组格式');
+            return;
+        }
+
+        // 发送到后端
+        const response = await fetch('/api/management/accounts/import', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(accounts)
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            showSuccess(result.message);
+            loadAccounts();
+
+            // 如果有错误，显示错误信息
+            if (result.errors && result.errors.length > 0) {
+                setTimeout(() => {
+                    result.errors.forEach(error => {
+                        showError(error);
+                    });
+                }, 1000);
+            }
+        } else {
+            const data = await response.json();
+            showError(data.detail || '导入失败');
+        }
+    } catch (error) {
+        console.error('导入失败:', error);
+        showError('导入失败：' + error.message);
+    } finally {
+        // 清空文件输入
+        fileInput.value = '';
+    }
+}
