@@ -374,6 +374,18 @@ async def update_apikey(apikey_id: int, apikey_update: ApiKeyUpdate, db: Session
             detail="API Key不存在"
         )
 
+    if apikey_update.api_key is not None:
+        # 检查新的api_key是否与其他记录冲突
+        existing_apikey = db.query(ApiKey).filter(
+            ApiKey.api_key == apikey_update.api_key,
+            ApiKey.id != apikey_id
+        ).first()
+        if existing_apikey:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="API Key已存在"
+            )
+        apikey.api_key = apikey_update.api_key
     if apikey_update.description is not None:
         apikey.description = apikey_update.description
     if apikey_update.status is not None:

@@ -69,6 +69,7 @@ class ApiKeyCreate(ApiKeyBase):
 
 
 class ApiKeyUpdate(BaseModel):
+    api_key: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = None
 
