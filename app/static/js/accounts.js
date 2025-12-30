@@ -9,9 +9,12 @@ export async function loadAccounts() {
 
         accounts.forEach(account => {
             const tr = document.createElement('tr');
+            const displayAccount = account.account.length > 50 
+                ? account.account.substring(0, 50) + '...' 
+                : account.account;
             tr.innerHTML = `
                 <td>${account.id}</td>
-                <td>${account.account}</td>
+                <td class="account-cell" title="${account.account}">${displayAccount}</td>
                 <td>${account.status === 'active' ? '启用' : '禁用'}</td>
                 <td>${account.description || ''}</td>
                 <td>
@@ -36,22 +39,11 @@ export function initAccountForm() {
         const account = document.getElementById('accounts-account').value;
         const status = document.getElementById('accounts-status').value;
         const description = document.getElementById('accounts-description').value;
-        const token_info = document.getElementById('accounts-token_info').value;
 
         // 验证账号字段
         if (!account || account.trim() === '') {
             showError('账号不能为空');
             return;
-        }
-
-        // 验证JSON格式（如果填写了token_info）
-        if (token_info && token_info.trim() !== '') {
-            try {
-                JSON.parse(token_info);
-            } catch (e) {
-                showError('Token信息必须是有效的JSON格式');
-                return;
-            }
         }
 
         try {
@@ -63,7 +55,7 @@ export function initAccountForm() {
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ status, description })
+                    body: JSON.stringify({ account: account.trim(), status, description })
                 });
             } else {
                 // 创建账号
@@ -98,7 +90,6 @@ export async function editAccount(id) {
 
         document.getElementById('accounts-id').value = account.id;
         document.getElementById('accounts-account').value = account.account;
-        document.getElementById('accounts-account').disabled = true;
         document.getElementById('accounts-status').value = account.status;
         document.getElementById('accounts-description').value = account.description || '';
 
@@ -109,6 +100,8 @@ export async function editAccount(id) {
         showError('加载账号信息失败');
     }
 }
+
+window.editAccount = editAccount;
 
 export async function deleteAccount(id) {
     if (!confirm('确定要删除此账号吗？')) {
@@ -132,3 +125,5 @@ export async function deleteAccount(id) {
         showError('删除失败');
     }
 }
+
+window.deleteAccount = deleteAccount;

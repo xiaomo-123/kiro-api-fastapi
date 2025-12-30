@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // 页面切换
-function showPage(pageName) {
+window.showPage = function(pageName) {
     // 隐藏所有页面
     document.querySelectorAll('.page').forEach(page => {
         page.classList.remove('active');
@@ -40,18 +40,18 @@ function showPage(pageName) {
 
     // 为选中的侧边栏项添加active类
     event.target.classList.add('active');
-}
+};
 
 // 退出登录
-function logout() {
+window.logout = function() {
     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('userId');
     localStorage.removeItem('username');
     window.location.href = 'login.html';
-}
+};
 
 // 模态框操作
-function openModal(type) {
+window.openModal = function(type) {
     const modal = document.getElementById('modal-' + type);
     modal.classList.add('active');
 
@@ -63,12 +63,12 @@ function openModal(type) {
     // 更新标题
     const title = document.getElementById('modal-' + type + '-title');
     title.textContent = '添加' + getTypeName(type);
-}
+};
 
-function closeModal(type) {
+window.closeModal = function(type) {
     const modal = document.getElementById('modal-' + type);
     modal.classList.remove('active');
-}
+};
 
 function getTypeName(type) {
     const typeNames = {
@@ -249,7 +249,7 @@ function initAccountForm() {
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ status, description })
+                    body: JSON.stringify({ account, status, description })
                 });
             } else {
                 // 创建账号
@@ -277,47 +277,7 @@ function initAccountForm() {
     });
 }
 
-async function editAccount(id) {
-    try {
-        const response = await fetch(`/api/management/accounts/${id}`);
-        const account = await response.json();
 
-        document.getElementById('accounts-id').value = account.id;
-        document.getElementById('accounts-account').value = account.account;
-        document.getElementById('accounts-account').disabled = true;
-        document.getElementById('accounts-status').value = account.status;
-        document.getElementById('accounts-description').value = account.description || '';
-
-        document.getElementById('modal-accounts-title').textContent = '编辑账号';
-        document.getElementById('modal-accounts').classList.add('active');
-    } catch (error) {
-        console.error('加载账号信息失败:', error);
-        alert('加载账号信息失败');
-    }
-}
-
-async function deleteAccount(id) {
-    if (!confirm('确定要删除此账号吗？')) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/management/accounts/${id}`, {
-            method: 'DELETE'
-        });
-
-        if (response.ok) {
-            loadAccounts();
-            alert('删除成功');
-        } else {
-            const data = await response.json();
-            alert(data.detail || '删除失败');
-        }
-    } catch (error) {
-        console.error('删除失败:', error);
-        alert('删除失败');
-    }
-}
 
 // API Key管理相关函数
 async function loadApiKeys() {

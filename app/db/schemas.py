@@ -31,10 +31,9 @@ class UserLogin(BaseModel):
 
 # 账号管理相关模型
 class AccountBase(BaseModel):
-    account: str = Field(..., min_length=1, max_length=100)
+    account: str = Field(..., min_length=1)
     status: str = Field(default='active')
     description: Optional[str] = None
-    token_info: Optional[str] = None  # JSON格式的认证信息
 
 
 class AccountCreate(AccountBase):
@@ -42,9 +41,9 @@ class AccountCreate(AccountBase):
 
 
 class AccountUpdate(BaseModel):
+    account: Optional[str] = None
     status: Optional[str] = None
     description: Optional[str] = None
-    token_info: Optional[str] = None
 
 
 class AccountResponse(AccountBase):

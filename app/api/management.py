@@ -112,18 +112,10 @@ async def delete_user(user_id: int, db: Session = Depends(get_db)):
 @router.post("/accounts", response_model=AccountResponse)
 async def create_account(account: AccountCreate, db: Session = Depends(get_db)):
     """创建账号"""
-    existing_account = db.query(Account).filter(Account.account == account.account).first()
-    if existing_account:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="账号已存在"
-        )
-
     db_account = Account(
         account=account.account,
         status=account.status,
-        description=account.description,
-        token_info=account.token_info
+        description=account.description
     )
     db.add(db_account)
     db.commit()
@@ -159,13 +151,13 @@ async def update_account(account_id: int, account_update: AccountUpdate, db: Ses
             status_code=status.HTTP_404_NOT_FOUND,
             detail="账号不存在"
         )
-
+    print(account_update)
+    if account_update.account is not None:
+        account.account = account_update.account
     if account_update.status is not None:
         account.status = account_update.status
     if account_update.description is not None:
         account.description = account_update.description
-    if account_update.token_info is not None:
-        account.token_info = account_update.token_info
 
     db.commit()
     db.refresh(account)

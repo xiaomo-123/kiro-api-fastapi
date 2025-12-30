@@ -110,6 +110,8 @@ export async function editUser(id) {
     }
 }
 
+window.editUser = editUser;
+
 export async function deleteUser(id) {
     if (!confirm('确定要删除此用户吗？')) {
         return;
@@ -132,3 +134,5 @@ export async function deleteUser(id) {
         showError('删除失败');
     }
 }
+
+window.deleteUser = deleteUser;

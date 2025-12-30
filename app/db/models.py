@@ -1,5 +1,5 @@
 # 数据库模型定义
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, Text
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -20,10 +20,9 @@ class Account(Base):
     __tablename__ = 'accounts'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    account = Column(String(100), unique=True, nullable=False)
+    account = Column(Text, nullable=False)
     status = Column(String(20), nullable=False, default='active')
     description = Column(String(255))
-    token_info = Column(Text)  # 存储JSON格式的认证信息
 
 
 class ApiKey(Base):

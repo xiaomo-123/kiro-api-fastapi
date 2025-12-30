@@ -129,12 +129,14 @@
         table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
         }
 
         th, td {
             padding: 15px;
             text-align: left;
             border-bottom: 1px solid #eee;
+            word-wrap: break-word;
         }
 
         th {
@@ -145,6 +147,15 @@
 
         tr:hover {
             background: #f8f9fa;
+        }
+
+        /* 账号列样式 */
+        .account-cell {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: block;
         }
 
         .btn-edit {
@@ -462,7 +473,7 @@
                 <input type="hidden" id="accounts-id">
                 <div class="form-group">
                     <label for="accounts-account">账号</label>
-                    <input type="text" id="accounts-account" required>
+                    <textarea id="accounts-account" rows="10" required></textarea>
                 </div>
                 <div class="form-group">
                     <label for="accounts-status">状态</label>
@@ -474,10 +485,6 @@
                 <div class="form-group">
                     <label for="accounts-description">描述</label>
                     <textarea id="accounts-description"></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="accounts-token_info">Token信息（JSON格式）</label>
-                    <textarea id="accounts-token_info" placeholder='{"accessToken": "...", "refreshToken": "..."}'></textarea>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-cancel" onclick="closeModal('accounts')">取消</button>
@@ -551,12 +558,12 @@
         </div>
     </div>
 
-    <script src="js/message.js"></script>
-    <script src="js/index.js"></script>
-    <script src="js/users.js"></script>
-    <script src="js/accounts.js"></script>
-    <script src="js/apikeys.js"></script>
-    <script src="js/proxies.js"></script>
+    <script type="module" src="js/message.js"></script>
+    <script type="module" src="js/index.js"></script>
+    <script type="module" src="js/users.js"></script>
+    <script type="module" src="js/accounts.js"></script>
+    <script type="module" src="js/apikeys.js"></script>
+    <script type="module" src="js/proxies.js"></script>
 
     <!-- 消息提示容器 -->
     <div id="message-container"></div>
