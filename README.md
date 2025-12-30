@@ -118,7 +118,7 @@ curl http://localhost:3000/health
 ## API 文档
 
 启动服务后访问：
-- Swagger UI: http://localhost:3000/docs
+- Swagger UI: http://localhost:3001/docs
 - ReDoc: http://localhost:3000/redoc
 
 ## 一致性校验清单

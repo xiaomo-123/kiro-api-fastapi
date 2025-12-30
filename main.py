@@ -12,6 +12,7 @@ from app.services.kiro_service import get_kiro_service
 from app.db.database import init_db
 from app.db.init_data import init_default_user
 from app.api.management import router as management_router
+from app.services.heartbeat import heartbeat_service
 
 # 配置日志
 logging.basicConfig(
@@ -35,6 +36,11 @@ async def lifespan(app: FastAPI):
     init_default_user()
     logger.info('Default admin user initialized')
 
+    # 初始化并启动心跳服务
+    heartbeat_service.init_app(app)
+    heartbeat_service.start()
+    logger.info('Heartbeat service started')
+
     # 注意：Kiro服务将在首次使用时初始化，而不是在启动时
     # 这样可以避免因为没有可用账号而导致服务无法启动
 
@@ -42,6 +48,8 @@ async def lifespan(app: FastAPI):
 
     # 关闭时清理资源
     logger.info('Shutting down application...')
+    # 停止心跳服务
+    heartbeat_service.stop()
     # 尝试关闭Kiro服务（如果已初始化）
     kiro_service = get_kiro_service()
     if kiro_service.is_initialized:
