@@ -52,7 +52,7 @@ export function initApiKeyForm() {
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ description, status })
+                    body: JSON.stringify({ api_key: api_key.trim(), description, status })
                 });
             } else {
                 // 创建API Key
@@ -87,7 +87,7 @@ export async function editApiKey(id) {
 
         document.getElementById('apikeys-id').value = apikey.id;
         document.getElementById('apikeys-api_key').value = apikey.api_key;
-        document.getElementById('apikeys-api_key').disabled = true;
+        document.getElementById('apikeys-api_key').disabled = false;
         document.getElementById('apikeys-description').value = apikey.description || '';
         document.getElementById('apikeys-status').value = apikey.status || '1';
 

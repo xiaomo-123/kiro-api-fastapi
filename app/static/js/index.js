@@ -62,6 +62,11 @@ window.openModal = function(type) {
     form.reset();
     document.getElementById(type + '-id').value = '';
 
+    // 特殊处理API Key输入框，确保它是可编辑的
+    if (type === 'apikeys') {
+        document.getElementById('apikeys-api_key').disabled = false;
+    }
+
     // 更新标题
     const title = document.getElementById('modal-' + type + '-title');
     title.textContent = '添加' + getTypeName(type);

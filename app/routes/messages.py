@@ -6,6 +6,8 @@ from typing import Optional
 from ..models import ClaudeMessageRequest, ErrorResponse
 from ..controllers.message_controller import get_message_controller
 from ..config import settings
+from ..db.database import get_db
+from ..db.models import ApiKey
 
 router = APIRouter()
 
@@ -25,6 +27,21 @@ async def verify_authorization(
         api_key = x_api_key
 
     # 验证 API key
+    if api_key:
+        # 检查API Key表中是否存在状态为1的匹配项
+        db = next(get_db())
+        try:
+            valid_api_key = db.query(ApiKey).filter(
+                ApiKey.api_key == api_key,
+                ApiKey.status == '1'
+            ).first()
+            
+            if valid_api_key:
+                return  # API Key在表中且状态为1，验证通过
+        finally:
+            db.close()
+    
+    # 如果API Key不在表中或状态不为1，则验证settings.REQUIRED_API_KEY
     if api_key != settings.REQUIRED_API_KEY:
         raise HTTPException(
             status_code=401,

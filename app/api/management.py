@@ -150,8 +150,7 @@ async def update_account(account_id: int, account_update: AccountUpdate, db: Ses
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="账号不存在"
-        )
-    print(account_update)
+        )    
     if account_update.account is not None:
         account.account = account_update.account
     if account_update.status is not None:
