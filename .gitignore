@@ -10,7 +10,7 @@ dist
 build
 # Testing
 coverage
-
+README-curl.md
 # Environment variables
 .env
 .env.local

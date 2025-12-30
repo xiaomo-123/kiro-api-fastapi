@@ -253,6 +253,11 @@ class KiroApiService:
 
         request_url = self._get_request_url(model)
 
+        # 打印请求信息
+        print(f"[Kiro Stream Request] URL: {request_url}")
+        print(f"[Kiro Stream Request] Headers: {json.dumps(headers, indent=2)}")
+        print(f"[Kiro Stream Request] Body: {json.dumps(request_data, indent=2)}")
+
         stream = None
         try:
             response = await self.session.post(
@@ -262,12 +267,19 @@ class KiroApiService:
                 timeout=aiohttp.ClientTimeout(total=300)
             )
 
+            # 打印响应头
+            print(f"[Kiro Stream Response] Status: {response.status}")
+            print(f"[Kiro Stream Response] Headers: {json.dumps(dict(response.headers), indent=2)}")
+
             stream = response.content
             buffer = ''
             last_content_event = None
 
             async for chunk in response.content.iter_chunked(1024):
                 buffer += chunk.decode('utf-8', errors='ignore')
+
+                # 打印响应数据块
+                print(f"[Kiro Stream Response] Chunk: {chunk.decode('utf-8', errors='ignore')}")
 
                 # 解析缓冲区中的事件
                 events, remaining = parse_aws_event_stream_buffer(buffer)
@@ -369,13 +381,24 @@ class KiroApiService:
         }
 
         async with aiohttp.ClientSession() as session:
+            # 打印请求信息
+            print(f"[Kiro Token Refresh] URL: {refresh_url}")
+            print(f"[Kiro Token Refresh] Headers: {json.dumps(headers, indent=2)}")
+            print(f"[Kiro Token Refresh] Body: {json.dumps(body, indent=2)}")
+
             async with session.post(refresh_url, json=body, headers=headers) as response:
+                # 打印响应信息
+                print(f"[Kiro Token Refresh] Status: {response.status}")
+                print(f"[Kiro Token Refresh] Headers: {json.dumps(dict(response.headers), indent=2)}")
+
                 if response.status != 200:
                     error_text = await response.text()
-                    print("krio 刷新参数:",self.expires_at,refresh_url,self.refresh_token,self.client_id,self.client_secret)
+                    print(f"[Kiro Token Refresh] Error: {error_text}")
                     raise Exception(f'Token refresh failed: {response.status} - {error_text}')
 
                 data = await response.json()
+                # 打印响应体
+                print(f"[Kiro Token Refresh] Body: {json.dumps(data, indent=2)}")
                 self.access_token = data.get('accessToken')
                 if data.get('refreshToken'):
                     self.refresh_token = data.get('refreshToken')
@@ -703,8 +726,17 @@ class KiroApiService:
             'amz-sdk-invocation-id': str(uuid.uuid4())
         }
 
+        # 打印请求信息
+        print(f"[Kiro Request] URL: {request_url}")
+        print(f"[Kiro Request] Headers: {json.dumps(headers, indent=2)}")
+        print(f"[Kiro Request] Body: {json.dumps(request_data, indent=2)}")
+
         try:
             async with self.session.post(request_url, json=request_data, headers=headers) as response:
+                # 打印响应头
+                print(f"[Kiro Response] Status: {response.status}")
+                print(f"[Kiro Response] Headers: {json.dumps(dict(response.headers), indent=2)}")
+
                 if response.status == 403 and not is_retry:
                     logger.info('[Kiro] Received 403. Attempting token refresh and retrying...')
                     await self._ensure_token(force_refresh=True)
@@ -727,10 +759,248 @@ class KiroApiService:
                     logger.error(f'[Kiro] API call failed with status {response.status}: {error_text}')
                     
 
-                return await response.json()
+                # 获取原始响应数据，与JS代码保持一致
+                # JS代码: const rawResponseText = Buffer.isBuffer(response.data) ? response.data.toString('utf8') : String(response.data);
+                try:
+                    # 检查响应头中的Content-Encoding
+                    content_encoding = response.headers.get('Content-Encoding', '').lower()
+                    logger.info(f'[Kiro] Content-Encoding: {content_encoding}')
+
+                    # 先获取原始字节数据
+                    raw_bytes = await response.read()
+                    logger.info(f'[Kiro] Raw response length: {len(raw_bytes)} bytes')
+
+                    # 尝试解码为UTF-8字符串
+                    try:
+                        response_text = raw_bytes.decode('utf-8')
+                    except UnicodeDecodeError:
+                        # 如果UTF-8解码失败，尝试解压gzip
+                        if 'gzip' in content_encoding or raw_bytes[:2] == b'\x1f\x8b':
+                            try:
+                                import gzip
+                                response_text = gzip.decompress(raw_bytes).decode('utf-8')
+                                logger.info('[Kiro] Successfully decompressed gzip response')
+                            except Exception as gzip_error:
+                                logger.error(f'[Kiro] Failed to decompress gzip: {gzip_error}')
+                                raise Exception('Failed to decompress gzip response')
+                        else:
+                            # AWS Event Stream格式 - 解析二进制协议
+                            # 格式: [总长度(4字节)][头部长度(4字节)][头部数据][预签名头部(4字节)][payload]
+                            response_text = self._parse_aws_event_stream(raw_bytes)
+
+                    # 打印响应体
+                    print(f"[Kiro Response] Body: {response_text}")
+
+                    # 尝试解析JSON
+                    try:
+                        response_data = json.loads(response_text)
+                    except json.JSONDecodeError as e:
+                        logger.error(f'[Kiro] Failed to parse JSON: {e}')
+                        logger.error(f'[Kiro] Response text (first 500 chars): {response_text[:500]}')
+                        raise Exception(f'Failed to parse API response as JSON: {e}')
+
+                except Exception as read_error:
+                    logger.error(f'[Kiro] Failed to read response: {read_error}')
+                    raise Exception(f'Failed to read API response: {read_error}')
+
+                return response_data
 
         except aiohttp.ClientError as e:
             logger.error(f'[Kiro] API call failed: {e}')
+
+    def _parse_aws_event_stream(self, raw_bytes: bytes) -> str:
+        """解析AWS Event Stream格式的响应
+
+        AWS Event Stream格式:
+        [总长度(4字节)][头部长度(4字节)][头部数据][预签名头部(4字节)][payload]
+
+        返回: 解析后的JSON字符串
+        """
+        import struct
+        import re
+
+        offset = 0
+        events = []
+
+        logger.info(f'[Kiro] Parsing AWS Event Stream, total bytes: {len(raw_bytes)}')
+        logger.info(f'[Kiro] Raw hex (first 200 chars): {raw_bytes.hex()[:200]}')
+
+        while offset < len(raw_bytes):
+            # 保存当前事件的起始位置
+            event_start = offset
+
+            # 读取总长度（4字节，大端序）
+            if offset + 4 > len(raw_bytes):
+                logger.warning(f'[Kiro] Not enough bytes for total_length at offset {offset}')
+                break
+            total_length = struct.unpack('>I', raw_bytes[offset:offset+4])[0]
+            logger.info(f'[Kiro] Event at offset {offset}: total_length={total_length}')
+            offset += 4
+
+            # 读取头部长度（4字节，大端序）
+            if offset + 4 > len(raw_bytes):
+                logger.warning(f'[Kiro] Not enough bytes for header_length at offset {offset}')
+                break
+            header_length = struct.unpack('>I', raw_bytes[offset:offset+4])[0]
+            logger.info(f'[Kiro] Event at offset {offset}: header_length={header_length}')
+            offset += 4
+
+            # 跳过头部数据
+            if offset + header_length > len(raw_bytes):
+                logger.warning(f'[Kiro] Not enough bytes for header at offset {offset}')
+                break
+            logger.info(f'[Kiro] Skipping {header_length} bytes of header at offset {offset}')
+            offset += header_length
+
+            # 跳过预签名头部（4字节）
+            if offset + 4 > len(raw_bytes):
+                logger.warning(f'[Kiro] Not enough bytes for prelude at offset {offset}')
+                break
+            offset += 4
+
+            # 读取payload
+            payload_length = total_length - header_length - 12  # 12 = 4(总长度) + 4(头部长度) + 4(预签名)
+            if offset + payload_length > len(raw_bytes):
+                logger.warning(f'[Kiro] Not enough bytes for payload at offset {offset}')
+                break
+
+            payload = raw_bytes[offset:offset+payload_length]
+            logger.info(f'[Kiro] Payload at offset {offset}: length={payload_length}, hex={payload.hex()[:100]}')
+
+            # 跳过payload
+            offset += payload_length
+
+            # 检查是否有CRC（4字节）
+            if offset + 4 <= len(raw_bytes):
+                crc = struct.unpack('>I', raw_bytes[offset:offset+4])[0]
+                logger.info(f'[Kiro] CRC at offset {offset}: {crc:08x}')
+                offset += 4
+
+            # 更新offset到下一个事件的开始位置
+            # 每个事件的完整长度是total_length，包括所有字段
+            offset = event_start + total_length
+            logger.info(f'[Kiro] Moving to next event at offset {offset}')
+
+            # 尝试将payload解码为UTF-8字符串
+            try:
+                # 尝试解码整个payload
+                payload_text = payload.decode('utf-8')
+                logger.info(f'[Kiro] Decoded payload: {payload_text[:200]}')
+            except UnicodeDecodeError:
+                # 如果整个payload解码失败，尝试解码前面的部分（排除可能的CRC）
+                # 查找最后一个有效的JSON结束位置
+                try:
+                    # 尝试逐步减少payload长度，直到可以成功解码
+                    for i in range(len(payload), 0, -1):
+                        try:
+                            payload_text = payload[:i].decode('utf-8')
+                            logger.info(f'[Kiro] Decoded payload (truncated to {i} bytes): {payload_text[:200]}')
+                            # 更新payload为解码成功的部分
+                            payload = payload[:i]
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                    else:
+                        # 如果所有尝试都失败，使用errors='ignore'
+                        payload_text = payload.decode('utf-8', errors='ignore')
+                        logger.warning(f'[Kiro] Decoded payload with errors: {payload_text[:200]}')
+                except Exception as e:
+                    logger.error(f'[Kiro] Failed to decode payload: {e}')
+                    raise
+                # 查找JSON数据
+                # Event Stream中可能包含多个JSON对象，我们需要提取它们
+                # 查找 {"content": 或 {"name": 或 {"input": 等模式
+
+                json_pattern = r'\{(?:\"content\"|\"name\"|\"input\"|\"stop\"|\"followupPrompt\")'
+                matches = list(re.finditer(json_pattern, payload_text))
+
+                for match in matches:
+                    start = match.start()
+                    # 找到匹配的JSON对象
+                    brace_count = 0
+                    in_string = False
+                    escape_next = False
+                    end = -1
+
+                    for i in range(start, len(payload_text)):
+                        char = payload_text[i]
+
+                        if escape_next:
+                            escape_next = False
+                            continue
+
+                        if char == '\\' and in_string:
+                            escape_next = True
+                            continue
+
+                        if char == '"' and not escape_next:
+                            in_string = not in_string
+                            continue
+
+                        if not in_string:
+                            if char == '{':
+                                brace_count += 1
+                            elif char == '}':
+                                brace_count -= 1
+                                if brace_count == 0:
+                                    end = i + 1
+                                    break
+
+                    if end > start:
+                        json_str = payload_text[start:end]
+                        try:
+                            event_data = json.loads(json_str)
+                            events.append(event_data)
+                        except json.JSONDecodeError:
+                            pass
+
+            except UnicodeDecodeError:
+                logger.warning(f'[Kiro] Failed to decode payload as UTF-8')
+                continue
+
+        # 将事件转换为JSON响应
+        if events:
+            # 如果有多个事件，合并它们
+            result = {}
+            content_parts = []
+
+            for event in events:
+                if 'content' in event and 'followupPrompt' not in event:
+                    # 收集所有content部分
+                    content_parts.append(event['content'])
+                elif 'name' in event and 'toolUseId' in event:
+                    if 'toolCalls' not in result:
+                        result['toolCalls'] = []
+                    result['toolCalls'].append({
+                        'name': event['name'],
+                        'toolUseId': event['toolUseId'],
+                        'input': event.get('input', '{}')
+                    })
+
+            # 合并所有content部分
+            if content_parts:
+                result['completion'] = ''.join(content_parts)
+                logger.info(f'[Kiro] Merged {len(content_parts)} content parts into completion')
+
+            return json.dumps(result)
+        else:
+            # 如果没有解析到事件，尝试直接解码整个响应
+            # 查找所有可能的JSON模式
+            text = raw_bytes.decode('utf-8', errors='ignore')
+            # 提取所有JSON对象
+            json_pattern = r'\{[^{}]*\}|\{(?:[^{}]|\{[^{}]*\})*\}'
+            matches = re.findall(json_pattern, text)
+
+            for match in matches:
+                try:
+                    data = json.loads(match)
+                    if 'completion' in data or 'content' in data:
+                        return json.dumps(data)
+                except json.JSONDecodeError:
+                    pass
+
+            # 如果还是没有找到，返回原始文本
+            return text
 
     def _parse_tool_calls_from_text(self, text: str) -> List[Dict]:
         """从文本中解析工具调用"""
