@@ -8,7 +8,7 @@ services:
       dockerfile: Dockerfile
     container_name: kiro-api-fastapi
     ports:
-      - "3000:3000"
+      - "5431:5431"
     volumes:
       # 挂载静态文件目录
       - ./app/static:/app/app/static
@@ -18,7 +18,7 @@ services:
       - ./.env:/app/.env
     environment:
       - HOST=0.0.0.0
-      - SERVER_PORT=3000
+      - SERVER_PORT=5431
       - REQUIRED_API_KEY=123456
     restart: unless-stopped
     user: "1000:1000"
