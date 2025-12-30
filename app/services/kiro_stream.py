@@ -387,6 +387,8 @@ class KiroStreamService(KiroBaseService):
         if not self.is_initialized:
             await self.initialize()
 
+        logger.info('[Kiro] Mode: 流式 Streaming')
+
         max_retries = settings.REQUEST_MAX_RETRIES
         base_delay = settings.REQUEST_BASE_DELAY / 1000  # 转换为秒
 
@@ -416,7 +418,7 @@ class KiroStreamService(KiroBaseService):
             proxy = None
             if settings.PROXY_SERVER:
                 proxy = settings.PROXY_SERVER
-                logger.info(f'[Kiro Stream] Using proxy for request: {proxy}')
+                logger.info(f'[Kiro Stream] 流式使用代理请求: {proxy}')
             elif settings.USE_SYSTEM_PROXY_KIRO:
                 logger.info('[Kiro Stream] Using system proxy for request')
 
@@ -502,6 +504,8 @@ class KiroStreamService(KiroBaseService):
         if self.is_expiry_date_near():
             logger.info('[Kiro] Token is near expiry, refreshing before generateContentStream request...')
             await self._ensure_token(force_refresh=True)
+
+        logger.info('[Kiro] Generating content in streaming mode')
 
         message_id = str(uuid.uuid4())
         final_model = self._map_model(model)

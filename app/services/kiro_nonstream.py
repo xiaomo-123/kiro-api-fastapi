@@ -30,9 +30,6 @@ class KiroNonStreamService(KiroBaseService):
         offset = 0
         events = []
 
-        logger.info(f'[Kiro] Parsing AWS Event Stream, total bytes: {len(raw_bytes)}')
-        logger.info(f'[Kiro] Raw hex (first 200 chars): {raw_bytes.hex()[:200]}')
-
         while offset < len(raw_bytes):
             # 保存当前事件的起始位置
             event_start = offset
@@ -42,7 +39,6 @@ class KiroNonStreamService(KiroBaseService):
                 logger.warning(f'[Kiro] Not enough bytes for total_length at offset {offset}')
                 break
             total_length = struct.unpack('>I', raw_bytes[offset:offset+4])[0]
-            logger.info(f'[Kiro] Event at offset {offset}: total_length={total_length}')
             offset += 4
 
             # 读取头部长度（4字节，大端序）
@@ -50,14 +46,12 @@ class KiroNonStreamService(KiroBaseService):
                 logger.warning(f'[Kiro] Not enough bytes for header_length at offset {offset}')
                 break
             header_length = struct.unpack('>I', raw_bytes[offset:offset+4])[0]
-            logger.info(f'[Kiro] Event at offset {offset}: header_length={header_length}')
             offset += 4
 
             # 跳过头部数据
             if offset + header_length > len(raw_bytes):
                 logger.warning(f'[Kiro] Not enough bytes for header at offset {offset}')
                 break
-            logger.info(f'[Kiro] Skipping {header_length} bytes of header at offset {offset}')
             offset += header_length
 
             # 跳过预签名头部（4字节）
@@ -73,7 +67,6 @@ class KiroNonStreamService(KiroBaseService):
                 break
 
             payload = raw_bytes[offset:offset+payload_length]
-            logger.info(f'[Kiro] Payload at offset {offset}: length={payload_length}, hex={payload.hex()[:100]}')
 
             # 跳过payload
             offset += payload_length
@@ -81,19 +74,16 @@ class KiroNonStreamService(KiroBaseService):
             # 检查是否有CRC（4字节）
             if offset + 4 <= len(raw_bytes):
                 crc = struct.unpack('>I', raw_bytes[offset:offset+4])[0]
-                logger.info(f'[Kiro] CRC at offset {offset}: {crc:08x}')
                 offset += 4
 
             # 更新offset到下一个事件的开始位置
             # 每个事件的完整长度是total_length，包括所有字段
             offset = event_start + total_length
-            logger.info(f'[Kiro] Moving to next event at offset {offset}')
 
             # 尝试将payload解码为UTF-8字符串
             try:
                 # 尝试解码整个payload
                 payload_text = payload.decode('utf-8')
-                logger.info(f'[Kiro] Decoded payload: {payload_text[:200]}')
             except UnicodeDecodeError:
                 # 如果整个payload解码失败，尝试解码前面的部分（排除可能的CRC）
                 # 查找最后一个有效的JSON结束位置
@@ -102,7 +92,6 @@ class KiroNonStreamService(KiroBaseService):
                     for i in range(len(payload), 0, -1):
                         try:
                             payload_text = payload[:i].decode('utf-8')
-                            logger.info(f'[Kiro] Decoded payload (truncated to {i} bytes): {payload_text[:200]}')
                             # 更新payload为解码成功的部分
                             payload = payload[:i]
                             break
@@ -111,7 +100,6 @@ class KiroNonStreamService(KiroBaseService):
                     else:
                         # 如果所有尝试都失败，使用errors='ignore'
                         payload_text = payload.decode('utf-8', errors='ignore')
-                        logger.warning(f'[Kiro] Decoded payload with errors: {payload_text[:200]}')
                 except Exception as e:
                     logger.error(f'[Kiro] Failed to decode payload: {e}')
                     raise
@@ -357,7 +345,7 @@ class KiroNonStreamService(KiroBaseService):
         is_retry: bool = False,
         retry_count: int = 0
     ) -> Dict:
-        """调用 Kiro API"""
+        """调用 Kiro API（非流式）"""
         if not self.is_initialized:
             await self.initialize()
 
@@ -365,6 +353,7 @@ class KiroNonStreamService(KiroBaseService):
         base_delay = settings.REQUEST_BASE_DELAY / 1000  # 转换为秒
 
         request_url = self._get_request_url(model)
+        logger.info('[Kiro] Mode: 非流式 Non-streaming')
         request_data = self._build_codewhisperer_request(
             body.get('messages', []),
             model,
@@ -387,7 +376,7 @@ class KiroNonStreamService(KiroBaseService):
             proxy = None
             if settings.PROXY_SERVER:
                 proxy = settings.PROXY_SERVER
-                logger.info(f'[Kiro] Using proxy for request: {proxy}')
+                logger.info(f'[Kiro] 非流式使用代理请求: {proxy}')
             elif settings.USE_SYSTEM_PROXY_KIRO:
                 logger.info('[Kiro] Using system proxy for request')
 
@@ -754,6 +743,7 @@ class KiroNonStreamService(KiroBaseService):
 
         # 确保令牌有效
         await self._ensure_token()
+        logger.info('[Kiro] Generating content in non-streaming mode')
 
         # 估算输入 tokens
         input_tokens = self._estimate_input_tokens(request_body)
