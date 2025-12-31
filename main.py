@@ -15,6 +15,7 @@ from app.api.management import router as management_router
 from app.api.pool import router as pool_router
 from app.services.heartbeat import heartbeat_service
 from app.services.account_pool import initialize_pool, close_redis
+from app.services.proxy_pool import initialize_pool as initialize_proxy_pool, close_redis as close_proxy_redis
 
 # 配置日志
 logging.basicConfig(
@@ -43,6 +44,10 @@ async def lifespan(app: FastAPI):
     await initialize_pool()
     logger.info('Account pool initialized')
 
+    # 初始化代理池
+    await initialize_proxy_pool()
+    logger.info('Proxy pool initialized')
+
     # 初始化并启动心跳服务
     heartbeat_service.init_app(app)
     heartbeat_service.start()
@@ -66,6 +71,7 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
     # 关闭 Redis 连接
     close_redis()
+    close_proxy_redis()
     # 尝试关闭Kiro服务（如果已初始化）
     kiro_service = get_kiro_service()
     if kiro_service.is_initialized:

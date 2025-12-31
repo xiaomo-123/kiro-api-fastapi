@@ -50,6 +50,14 @@ async def initialize_pool():
         return
     
     try:
+        # 先清空所有账号数据
+        account_keys = redis_client.keys("account_pool:*")
+        if account_keys:
+            redis_client.delete(*account_keys)
+        redis_client.delete("available_accounts")
+        logger.info(f"Cleared {len(account_keys) if account_keys else 0} existing accounts from pool")
+        
+        # 从数据库加载账号数据
         async with AsyncSessionLocal() as db:
             stmt = select(Account).filter(Account.status == "1")
             result = await db.execute(stmt)

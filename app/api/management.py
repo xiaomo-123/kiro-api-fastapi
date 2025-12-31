@@ -23,6 +23,15 @@ from ..services.account_pool import (
     batch_delete_accounts,
     import_accounts
 )
+from ..services.proxy_pool import (
+    create_proxy,
+    get_proxies,
+    get_proxy,
+    update_proxy,
+    delete_proxy,
+    batch_delete_proxies,
+    import_proxies
+)
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -217,89 +226,128 @@ async def delete_apikey(apikey_id: int, db: AsyncSession = Depends(get_db)):
 
 # 代理管理路由
 @router.post("/proxies", response_model=ProxyResponse)
-async def create_proxy(proxy: ProxyCreate, db: AsyncSession = Depends(get_db)):
+async def create_proxy_endpoint(proxy: ProxyCreate):
     """创建代理"""
-    db_proxy = Proxy(
-        proxy_type=proxy.proxy_type,
-        proxy_url=proxy.proxy_url,
-        proxy_port=proxy.proxy_port,
-        username=proxy.username,
-        password=proxy.password,
-        status=proxy.status
-    )
-    db.add(db_proxy)
-    await db.commit()
-    await db.refresh(db_proxy)
-    return db_proxy
+    try:
+        return await create_proxy(
+            proxy_type=proxy.proxy_type,
+            proxy_url=proxy.proxy_url,
+            proxy_port=proxy.proxy_port,
+            username=proxy.username,
+            password=proxy.password,
+            status=proxy.status
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"创建代理失败: {str(e)}"
+        )
 
 
 @router.get("/proxies", response_model=List[ProxyResponse])
-async def get_proxies(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
+async def get_proxies_endpoint(skip: int = 0, limit: int = 100):
     """获取代理列表"""
-    stmt = select(Proxy).offset(skip).limit(limit)
-    result = await db.execute(stmt)
-    proxies = result.scalars().all()
-    return proxies
+    try:
+        return await get_proxies(skip=skip, limit=limit)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取代理列表失败: {str(e)}"
+        )
 
 
 @router.get("/proxies/{proxy_id}", response_model=ProxyResponse)
-async def get_proxy(proxy_id: int, db: AsyncSession = Depends(get_db)):
+async def get_proxy_endpoint(proxy_id: int):
     """获取单个代理"""
-    stmt = select(Proxy).filter(Proxy.id == proxy_id)
-    result = await db.execute(stmt)
-    proxy = result.scalars().first()
-    if not proxy:
+    try:
+        proxy = await get_proxy(proxy_id)
+        if not proxy:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="代理不存在"
+            )
+        return proxy
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="代理不存在"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取代理失败: {str(e)}"
         )
-    return proxy
 
 
 @router.put("/proxies/{proxy_id}", response_model=ProxyResponse)
-async def update_proxy(proxy_id: int, proxy_update: ProxyUpdate, db: AsyncSession = Depends(get_db)):
+async def update_proxy_endpoint(proxy_id: int, proxy_update: ProxyUpdate):
     """更新代理"""
-    stmt = select(Proxy).filter(Proxy.id == proxy_id)
-    result = await db.execute(stmt)
-    proxy = result.scalars().first()
-    if not proxy:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="代理不存在"
+    try:
+        proxy = await update_proxy(
+            proxy_id=proxy_id,
+            proxy_type=proxy_update.proxy_type,
+            proxy_url=proxy_update.proxy_url,
+            proxy_port=proxy_update.proxy_port,
+            username=proxy_update.username,
+            password=proxy_update.password,
+            status=proxy_update.status
         )
-
-    if proxy_update.proxy_type is not None:
-        proxy.proxy_type = proxy_update.proxy_type
-    if proxy_update.proxy_url is not None:
-        proxy.proxy_url = proxy_update.proxy_url
-    if proxy_update.proxy_port is not None:
-        proxy.proxy_port = proxy_update.proxy_port
-    if proxy_update.username is not None:
-        proxy.username = proxy_update.username
-    if proxy_update.password is not None:
-        proxy.password = proxy_update.password
-    if proxy_update.status is not None:
-        proxy.status = proxy_update.status
-
-    await db.commit()
-    await db.refresh(proxy)
-    return proxy
+        if not proxy:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="代理不存在"
+            )
+        return proxy
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"更新代理失败: {str(e)}"
+        )
 
 
 @router.delete("/proxies/{proxy_id}")
-async def delete_proxy(proxy_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_proxy_endpoint(proxy_id: int):
     """删除代理"""
-    stmt = select(Proxy).filter(Proxy.id == proxy_id)
-    result = await db.execute(stmt)
-    proxy = result.scalars().first()
-    if not proxy:
+    try:
+        success = await delete_proxy(proxy_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="代理不存在"
+            )
+        return {"message": "代理删除成功"}
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="代理不存在"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"删除代理失败: {str(e)}"
         )
-    await db.delete(proxy)
-    await db.commit()
-    return {"message": "代理删除成功"}
+
+
+@router.post("/proxies/batch-delete")
+async def batch_delete_proxies_endpoint(request: AccountBatchDelete):
+    """批量删除代理"""
+    try:
+        return await batch_delete_proxies(request.ids)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量删除代理失败: {str(e)}"
+        )
+
+
+@router.post("/proxies/import")
+async def import_proxies_endpoint(proxies: List[dict]):
+    """批量导入代理"""
+    try:
+        return await import_proxies(proxies)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量导入代理失败: {str(e)}"
+        )
 # 账号管理路由
 @router.post("/accounts", response_model=AccountResponse)
 async def create_account_endpoint(account: AccountCreate):
