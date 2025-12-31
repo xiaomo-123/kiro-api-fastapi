@@ -1,3 +1,4 @@
+
 # 应用入口
 import logging
 from contextlib import asynccontextmanager
@@ -63,6 +64,7 @@ async def lifespan(app: FastAPI):
         await kiro_service.close()
     logger.info('Application shutdown complete')
 
+
 # 创建 FastAPI 应用
 app = FastAPI(
     title='Kiro API FastAPI',
@@ -87,6 +89,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # 注册路由
 app.include_router(messages_router)
 app.include_router(management_router, prefix="/api/management", tags=["管理"])
+
 
 @app.get('/')
 async def root():
@@ -113,25 +116,9 @@ async def health_check():
 
 if __name__ == '__main__':
     import uvicorn
-    import os
-
-    # 尝试使用 uvloop 和 httptools 提升性能
-    try:
-        import uvloop
-        uvloop.install()
-        logger.info('uvloop installed and enabled')
-    except ImportError:
-        logger.info('uvloop not available, using default event loop')
-
-    # 配置 uvicorn
     uvicorn.run(
         'main:app',
         host=settings.HOST,
         port=settings.SERVER_PORT,
-        log_level='info',
-        loop='uvloop' if os.name != 'nt' else None,  # Windows 不支持 uvloop
-        access_log=True,
-        use_colors=True,
-        limit_concurrency=1000,
-        timeout_keep_alive=5
+        log_level='info'
     )
