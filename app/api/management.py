@@ -118,12 +118,12 @@ async def create_account(account: AccountCreate, db: Session = Depends(get_db)):
         account_data = json.loads(account.account)
         
         # 检查账号是否已存在
-        existing_account = db.query(Account).first()
-        if existing_account:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="账号已存在"
-            )
+        # existing_account = db.query(Account).first()
+        # if existing_account:
+        #     raise HTTPException(
+        #         status_code=status.HTTP_400_BAD_REQUEST,
+        #         detail="账号已存在"
+        #     )
 
         # 验证必填字段不为空
         if not account_data.get('accessToken') or not account_data.get('refreshToken'):
