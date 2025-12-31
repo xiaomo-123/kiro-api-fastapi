@@ -16,6 +16,7 @@ from ..utils import (
 )
 from ..db.database import get_db
 from ..db.models import Proxy, Account
+from ..db.async_helper import load_accounts_from_db, load_proxy_from_db, disable_account_in_db
 
 logger = logging.getLogger(__name__)
 
@@ -315,7 +316,7 @@ class KiroBaseService:
         logger.info('[Kiro] Initializing Kiro API Service...')
 
         # 从数据库加载代理
-        self.proxy = self._load_proxy_from_db()
+        self.proxy = await load_proxy_from_db()
 
         # 打印代理状态
         if self.proxy:
@@ -326,7 +327,7 @@ class KiroBaseService:
             print('[Kiro Proxy] No proxy, using direct connection')
 
         # 从数据库加载账号
-        accounts = self._load_accounts_from_db()
+        accounts = await load_accounts_from_db()
         if not accounts:
             error_msg = 'No active accounts found in database. Please add accounts to the database before starting the service.'
             logger.error(f'[Kiro] {error_msg}')
@@ -350,9 +351,10 @@ class KiroBaseService:
 
         # 创建 HTTP 会话
         connector = aiohttp.TCPConnector(
-            limit=100,
+            limit=200,
             limit_per_host=100,
-            force_close=False
+            force_close=False,
+             enable_cleanup_closed=True
         )
 
         timeout = aiohttp.ClientTimeout(total=300)  # 5分钟超时

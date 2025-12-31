@@ -29,11 +29,12 @@ async def lifespan(app: FastAPI):
     logger.info('Starting application...')
 
     # 初始化数据库
-    init_db()
+    from app.db.database import init_db
+    await init_db()
     logger.info('Database initialized')
 
     # 初始化默认管理员用户
-    init_default_user()
+    await init_default_user()
     logger.info('Default admin user initialized')
 
     # 初始化并启动心跳服务
@@ -50,6 +51,13 @@ async def lifespan(app: FastAPI):
     logger.info('Shutting down application...')
     # 停止心跳服务
     heartbeat_service.stop()
+    # 关闭请求队列管理器
+    from app.routes.message_queue import get_queue_manager
+    queue_manager = get_queue_manager()
+    await queue_manager.shutdown()
+    # 关闭数据库引擎
+    from app.db.database import engine
+    await engine.dispose()
     # 尝试关闭Kiro服务（如果已初始化）
     kiro_service = get_kiro_service()
     if kiro_service.is_initialized:

@@ -41,7 +41,25 @@ window.showPage = function(pageName) {
     document.getElementById('page-' + pageName).classList.add('active');
 
     // 为选中的侧边栏项添加active类
-    event.target.classList.add('active');
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
+
+    // 根据页面名称重新加载对应数据
+    switch(pageName) {
+        case 'users':
+            loadUsers();
+            break;
+        case 'accounts':
+            loadAccounts();
+            break;
+        case 'apikeys':
+            loadApiKeys();
+            break;
+        case 'proxies':
+            loadProxies();
+            break;
+    }
 };
 
 // 退出登录

@@ -1,4 +1,5 @@
-# 管理系统API路由
+
+# 管理系统API路由（异步版本）
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -115,7 +116,6 @@ async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="用户不存在"
         )
-
     await db.delete(user)
     await db.commit()
     return {"message": "用户删除成功"}
@@ -129,22 +129,14 @@ async def create_account(account: AccountCreate, db: AsyncSession = Depends(get_
         # 验证account字段是否为有效的JSON
         import json
         account_data = json.loads(account.account)
-        
-        # 检查账号是否已存在
-        # existing_account = db.query(Account).first()
-        # if existing_account:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_400_BAD_REQUEST,
-        #         detail="账号已存在"
-        #     )
 
         # 验证必填字段不为空
         if not account_data.get('accessToken') or not account_data.get('refreshToken'):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="accessToken和refreshToken不能为空"
-            )     
-       
+            )
+
         # 设置默认值
         if 'authMethod' not in account_data:
             account_data['authMethod'] = 'social'
@@ -169,7 +161,7 @@ async def create_account(account: AccountCreate, db: AsyncSession = Depends(get_
         await db.commit()
         await db.refresh(db_account)
         return db_account
-    
+
     except json.JSONDecodeError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -217,22 +209,12 @@ async def update_account(account_id: int, account_update: AccountUpdate, db: Asy
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="账号不存在"
-        )    
-    # 如果更新account字段，直接修改
-    if account_update.account is not None:
-            
-        account.account = account_update.account
-            
+        )
 
-            
-
-        
-
-    
-    if account_update.status is not None:
-        account.status = account_update.status
     if account_update.description is not None:
         account.description = account_update.description
+    if account_update.status is not None:
+        account.status = account_update.status
 
     await db.commit()
     await db.refresh(account)
@@ -250,7 +232,6 @@ async def delete_account(account_id: int, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="账号不存在"
         )
-
     await db.delete(account)
     await db.commit()
     return {"message": "账号删除成功"}
@@ -259,74 +240,97 @@ async def delete_account(account_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/accounts/batch-delete")
 async def batch_delete_accounts(request: AccountBatchDelete, db: AsyncSession = Depends(get_db)):
     """批量删除账号"""
-    ids = request.ids
+    try:
+        # 查询所有要删除的账号
+        stmt = select(Account).filter(Account.id.in_(request.account_ids))
+        result = await db.execute(stmt)
+        accounts = result.scalars().all()
 
-    if not ids:
+        if not accounts:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="未找到要删除的账号"
+            )
+
+        # 删除账号
+        for account in accounts:
+            await db.delete(account)
+
+        await db.commit()
+        return {"message": f"成功删除 {len(accounts)} 个账号"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="请提供要删除的账号ID列表"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量删除账号失败: {str(e)}"
         )
-
-    # 查询要删除的账号
-    stmt = select(Account).filter(Account.id.in_(ids))
-    result = await db.execute(stmt)
-    accounts = result.scalars().all()
-
-    if not accounts:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="未找到要删除的账号"
-        )
-
-    # 批量删除
-    for account in accounts:
-        await db.delete(account)
-
-    await db.commit()
-
-    return {
-        "message": f"成功删除 {len(accounts)} 个账号",
-        "deleted_count": len(accounts)
-    }
 
 
 @router.post("/accounts/import")
 async def import_accounts(accounts: List[dict], db: AsyncSession = Depends(get_db)):
     """批量导入账号"""
-    success_count = 0
-    error_count = 0
-    errors = []
+    try:
+        import json
+        from datetime import datetime
 
-    for idx, account_data in enumerate(accounts, 1):
-        try:
-            # 将JSON对象转换为字符串存储
-            account_str = str(account_data)
+        imported_count = 0
+        failed_count = 0
 
-            db_account = Account(
-                account=account_str,
-                status='1',
-                description=f'导入自JSON - 第{idx}条'
-            )
-            db.add(db_account)
-            await db.commit()
-            success_count += 1
-        except Exception as e:
-            error_count += 1
-            errors.append(f"第{idx}条导入失败: {str(e)}")
-            await db.rollback()
+        for account_dict in accounts:
+            try:
+                # 验证account字段是否为有效的JSON
+                account_data = account_dict.get('account', {})
+                if isinstance(account_data, str):
+                    account_data = json.loads(account_data)
 
-    return {
-        "message": f"导入完成，成功{success_count}条，失败{error_count}条",
-        "success_count": success_count,
-        "error_count": error_count,
-        "errors": errors
-    }
+                # 验证必填字段不为空
+                if not account_data.get('accessToken') or not account_data.get('refreshToken'):
+                    failed_count += 1
+                    continue
+
+                # 设置默认值
+                if 'authMethod' not in account_data:
+                    account_data['authMethod'] = 'social'
+
+                if 'profileArn' not in account_data:
+                    account_data['profileArn'] = "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK"
+
+                if 'expiresAt' not in account_data:
+                    account_data['expiresAt'] = datetime.utcnow().isoformat() + 'Z'
+
+                # 创建账号
+                db_account = Account(
+                    account=json.dumps(account_data),
+                    status=account_dict.get('status', '1'),
+                    description=account_dict.get('description', '')
+                )
+                db.add(db_account)
+                imported_count += 1
+            except Exception as e:
+                failed_count += 1
+                continue
+
+        await db.commit()
+        return {
+            "message": f"导入完成",
+            "imported": imported_count,
+            "failed": failed_count
+        }
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量导入账号失败: {str(e)}"
+        )
 
 
 # API Key管理路由
 @router.post("/apikeys", response_model=ApiKeyResponse)
 async def create_apikey(apikey: ApiKeyCreate, db: AsyncSession = Depends(get_db)):
     """创建API Key"""
+    # 检查API Key是否已存在
     stmt = select(ApiKey).filter(ApiKey.api_key == apikey.api_key)
     result = await db.execute(stmt)
     existing_apikey = result.scalars().first()
@@ -336,6 +340,7 @@ async def create_apikey(apikey: ApiKeyCreate, db: AsyncSession = Depends(get_db)
             detail="API Key已存在"
         )
 
+    # 创建API Key
     db_apikey = ApiKey(
         api_key=apikey.api_key,
         description=apikey.description,
@@ -382,20 +387,6 @@ async def update_apikey(apikey_id: int, apikey_update: ApiKeyUpdate, db: AsyncSe
             detail="API Key不存在"
         )
 
-    if apikey_update.api_key is not None:
-        # 检查新的api_key是否与其他记录冲突
-        stmt = select(ApiKey).filter(
-            ApiKey.api_key == apikey_update.api_key,
-            ApiKey.id != apikey_id
-        )
-        result = await db.execute(stmt)
-        existing_apikey = result.scalars().first()
-        if existing_apikey:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="API Key已存在"
-            )
-        apikey.api_key = apikey_update.api_key
     if apikey_update.description is not None:
         apikey.description = apikey_update.description
     if apikey_update.status is not None:
@@ -417,7 +408,6 @@ async def delete_apikey(apikey_id: int, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="API Key不存在"
         )
-
     await db.delete(apikey)
     await db.commit()
     return {"message": "API Key删除成功"}
@@ -505,7 +495,6 @@ async def delete_proxy(proxy_id: int, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="代理不存在"
         )
-
     await db.delete(proxy)
     await db.commit()
     return {"message": "代理删除成功"}

@@ -12,7 +12,7 @@ services:
     volumes:
       # 挂载静态文件目录
       - ./app/static:/app/app/static
-      # 挂载数据库文件，确保可读写
+      # 挂载数据库文件
       - ./kiro_management.db:/app/kiro_management.db
       # 挂载环境变量文件
       - ./.env:/app/.env

@@ -64,6 +64,15 @@ cat >> docker-compose-loadbalance.yml << 'EOF'
     restart: unless-stopped
 EOF
 
+# 创建数据库目录和文件
+for ((i=1; i<=INSTANCES; i++)); do
+    if [ ! -f "kiro_management_$i.db" ]; then
+        touch "kiro_management_$i.db"
+        chmod 666 "kiro_management_$i.db"
+    fi
+done
+
+# 创建docker-compose配置
 for ((i=1; i<=INSTANCES; i++)); do
     PORT=$((START_PORT + i - 1))
     cat >> docker-compose-loadbalance.yml << EOF
@@ -82,6 +91,7 @@ for ((i=1; i<=INSTANCES; i++)); do
       - HOST=0.0.0.0
       - SERVER_PORT=$PORT
       - REQUIRED_API_KEY=123456
+      - DB_PATH=/app/kiro_management.db
     restart: unless-stopped
 EOF
 done

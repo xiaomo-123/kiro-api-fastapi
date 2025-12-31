@@ -60,6 +60,10 @@ REQUEST_BASE_DELAY=1000
 # 日志配置
 PROMPT_LOG_MODE=none
 PROMPT_LOG_BASE_NAME=prompt_log
+
+# 数据库配置（可选，默认使用 SQLite）
+DB_PATH=./kiro_management.db
+# 如需使用 PostgreSQL 或 MySQL 以获得更好的连接池支持，请修改 app/db/database.py 中的数据库 URL
 ```
 
 ## 安装与运行
