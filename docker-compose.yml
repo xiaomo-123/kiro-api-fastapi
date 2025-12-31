@@ -1,24 +1,37 @@
-
-version: '3.8'
+version: "3.8"
 
 services:
-  kiro-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: kiro-api-fastapi
+  redis:
+    image: redis:7-alpine
+    container_name: kiro-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    container_name: kiro-api
     ports:
       - "5431:5431"
-    volumes:
-      # 挂载静态文件目录
-      - ./app/static:/app/app/static
-      # 挂载数据库文件
-      - ./kiro_management.db:/app/kiro_management.db
-      # 挂载环境变量文件
-      - ./.env:/app/.env
     environment:
-      - HOST=0.0.0.0
-      - SERVER_PORT=5431
-      - REQUIRED_API_KEY=123456
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./kiro_management.db:/app/kiro_management.db
     restart: unless-stopped
-    
+
+volumes:
+  redis_data:
+    driver: local
