@@ -14,10 +14,9 @@ from ..utils import (
     get_system_runtime_info,
     get_content_text
 )
-from ..db.database import get_db
-from ..db.models import Proxy, Account
-from ..db.async_helper import load_proxy_from_db, disable_account_in_db
+
 from .account_pool import get_available_account, release_account
+from .proxy_pool import get_available_proxy, release_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +64,7 @@ class KiroBaseService:
         self.machine_id: Optional[str] = None
         self.session: Optional[aiohttp.ClientSession] = None
         self.proxy: Optional[str] = None
+        self.current_proxy_id: Optional[int] = None  # 当前使用的代理ID
         
         # 账号管理相关属性
         self.accounts_cache: List[Dict] = []  # 缓存所有可用账号
@@ -158,6 +158,94 @@ class KiroBaseService:
             logger.error(f'[Kiro] Failed to load account from pool: {e}')
             return None
 
+    async def _load_proxy_from_pool(self) -> Optional[str]:
+        """从代理池获取可用代理"""
+        try:
+            # 从 Redis 代理池获取可用代理
+            proxy_data = await get_available_proxy()
+            if not proxy_data:
+                logger.warning('[Kiro] No available proxy from pool')
+                return None
+
+            # 获取代理 ID
+            proxy_id = proxy_data.get('id')
+            if not proxy_id:
+                logger.error('[Kiro] Proxy data missing id field')
+                return None
+
+            # 记录当前代理 ID
+            self.current_proxy_id = int(proxy_id)
+
+            # 构建完整的代理URL
+            proxy_type = proxy_data.get('proxy_type', 'http')
+            proxy_url = proxy_data.get('proxy_url', '')
+            proxy_port = proxy_data.get('proxy_port', '')
+            username = proxy_data.get('username', '')
+            password = proxy_data.get('password', '')
+
+            # 构建代理URL
+            proxy_url_str = f"{proxy_type}://"
+            if username and password:
+                proxy_url_str += f"{username}:{password}@"
+            proxy_url_str += proxy_url
+            if proxy_port:
+                proxy_url_str += f":{proxy_port}"
+
+            logger.info(f'[Kiro] Successfully loaded proxy {proxy_id} from pool: {proxy_url_str}')
+            return proxy_url_str
+        except Exception as e:
+            logger.error(f'[Kiro] Failed to load proxy from pool: {e}')
+            return None
+
+    async def _has_multiple_proxies(self) -> bool:
+        """检查是否有多个可用代理"""
+        try:
+            from .proxy_pool import redis_client
+            if redis_client is None:
+                return False
+            
+            # 获取可用代理数量
+            available_count = redis_client.zcard("available_proxies")
+            logger.info(f'[Kiro] Available proxies count: {available_count}')
+            return available_count > 1
+        except Exception as e:
+            logger.error(f'[Kiro] Failed to check proxy count: {e}')
+            return False
+
+    async def _switch_to_next_proxy(self) -> bool:
+        """切换到下一个可用代理（不标记为失败）
+        
+        Args:
+            force: 是否强制切换，不检查失败次数
+        """""
+        try:
+            # 检查是否有多个可用代理
+            has_multiple = await self._has_multiple_proxies()
+            if not has_multiple:
+                logger.info('[Kiro] Only one proxy available, not switching')
+                return False
+
+            # 释放当前代理（不标记为失败，仅释放锁）
+            if self.current_proxy_id:
+                await release_proxy(self.current_proxy_id, success=True)
+                logger.info(f'[Kiro] Released proxy {self.current_proxy_id} (normal release)')
+
+            # 从 Redis 代理池获取新的代理
+            proxy_url = await self._load_proxy_from_pool()
+            if not proxy_url:
+                logger.warning('[Kiro] No available proxy from pool for switching')
+                return False
+
+            # 更新代理
+            self.proxy = proxy_url
+            logger.info(f'[Kiro] Successfully switched to proxy {self.current_proxy_id}')
+            return True
+        except Exception as e:
+            logger.error(f'[Kiro] Failed to switch to next proxy: {e}')
+            return False
+
+
+
     async def _disable_current_account(self) -> bool:
         """禁用当前账号"""
         try:
@@ -247,33 +335,6 @@ class KiroBaseService:
             logger.error(f'[Kiro] Failed to refresh account from pool: {e}')
             return False
    
-    def _load_proxy_from_db(self) -> Optional[str]:
-        """从数据库加载代理配置"""
-        try:
-            db = next(get_db())
-            try:
-                # 获取第一条状态为1的代理记录
-                proxy = db.query(Proxy).filter(Proxy.status == '1').first()
-                if proxy:
-                    # 构建完整的代理URL
-                    proxy_url = f"{proxy.proxy_type}://"
-                    if proxy.username and proxy.password:
-                        proxy_url += f"{proxy.username}:{proxy.password}@"
-                    proxy_url += f"{proxy.proxy_url}"
-                    if proxy.proxy_port:
-                        proxy_url += f":{proxy.proxy_port}"
-                    
-                    logger.info(f'[Kiro] Loaded proxy from database: {proxy_url}')
-                    return proxy_url
-                else:
-                    logger.info('[Kiro] No active proxy found in database')
-                    return None
-            finally:
-                db.close()
-        except Exception as e:
-            logger.error(f'[Kiro] Failed to load proxy from database: {e}')
-            return None
-
     async def initialize(self):
         """初始化服务"""
         if self.is_initialized:
@@ -281,12 +342,12 @@ class KiroBaseService:
 
         logger.info('[Kiro] Initializing Kiro API Service...')
 
-        # 从数据库加载代理
-        self.proxy = await load_proxy_from_db()
+        # 从 Redis 代理池加载代理
+        self.proxy = await self._load_proxy_from_pool()
 
         # 打印代理状态
         if self.proxy:
-            logger.info(f'[Kiro] Using proxy from database: {self.proxy}')
+            logger.info(f'[Kiro] Using proxy from pool: {self.proxy}')
             print(f'[Kiro Proxy] Proxy enabled: {self.proxy}')
         else:
             logger.info('[Kiro] No proxy configured, using direct connection')
@@ -389,13 +450,13 @@ class KiroBaseService:
         async with aiohttp.ClientSession() as session:
             # 打印请求信息
             print(f"[Kiro Token Refresh] URL: {refresh_url}")
-            print(f"[Kiro Token Refresh] Headers: {json.dumps(headers, indent=2)}")
-            print(f"[Kiro Token Refresh] Body: {json.dumps(body, indent=2)}")
+            # print(f"[Kiro Token Refresh] Headers: {json.dumps(headers, indent=2)}")
+            # print(f"[Kiro Token Refresh] Body: {json.dumps(body, indent=2)}")
 
             async with session.post(refresh_url, json=body, headers=headers) as response:
                 # 打印响应信息
                 print(f"[Kiro Token Refresh] Status: {response.status}")
-                print(f"[Kiro Token Refresh] Headers: {json.dumps(dict(response.headers), indent=2)}")
+                # print(f"[Kiro Token Refresh] Headers: {json.dumps(dict(response.headers), indent=2)}")
 
                 if response.status != 200:
                     error_text = await response.text()
@@ -404,7 +465,7 @@ class KiroBaseService:
 
                 data = await response.json()
                 # 打印响应体
-                print(f"[Kiro Token Refresh] Body: {json.dumps(data, indent=2)}")
+                # print(f"[Kiro Token Refresh] Body: {json.dumps(data, indent=2)}")
                 self.access_token = data.get('accessToken')
                 if data.get('refreshToken'):
                     self.refresh_token = data.get('refreshToken')

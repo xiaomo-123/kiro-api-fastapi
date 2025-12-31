@@ -354,6 +354,7 @@ class KiroNonStreamService(KiroBaseService):
 
         request_url = self._get_request_url(model)
         logger.info('[Kiro] Mode: 非流式 Non-streaming')
+        logger.info(f'[Kiro] Request URL: {request_url}')
         request_data = self._build_codewhisperer_request(
             body.get('messages', []),
             model,
@@ -372,10 +373,13 @@ class KiroNonStreamService(KiroBaseService):
             if proxy:
                 logger.info(f'[Kiro] 非流式使用代理请求: {proxy}')
 
-            async with self.session.post(request_url, json=request_data, headers=headers, proxy=proxy) as response:
+            async with self.session.post(request_url, json=request_data, headers=headers, proxy=proxy) as response:                # 打印响应状态
+                
+                logger.info(f'[Kiro] Response status: {response.status}')
 
                 if response.status == 403 and not is_retry:
                     logger.info('[Kiro] Received 403. Attempting token refresh and retrying...')
+                    # 刷新令牌后重新尝试
                     await self._ensure_token(force_refresh=True)
                     return await self._call_api(method, model, body, True, retry_count)
                 
@@ -385,8 +389,8 @@ class KiroNonStreamService(KiroBaseService):
                     # 禁用当前账号
                     self._disable_current_account()
                     # 切换到下一个账号
-                    switched = await self._switch_to_next_account()
-                    if switched:
+                    switched_account = await self._switch_to_next_account()
+                    if switched_account:
                         # 切换账号后重新尝试
                         await self._ensure_token(force_refresh=True)
                         return await self._call_api(method, model, body, False, retry_count)

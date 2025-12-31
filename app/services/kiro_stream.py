@@ -349,6 +349,7 @@ class KiroStreamService(KiroBaseService):
         }
 
         request_url = self._get_request_url(model)
+        logger.info(f'[Kiro Stream] Request URL: {request_url}')
 
         try:
             # 使用从数据库加载的代理
@@ -363,8 +364,12 @@ class KiroStreamService(KiroBaseService):
                 timeout=aiohttp.ClientTimeout(total=300),
                 proxy=proxy
             ) as response:
+                # 打印响应状态
+                logger.info(f'[Kiro Stream] Response status: {response.status}')
+
                 if response.status == 403 and not is_retry:
                     logger.info('[Kiro] Received 403. Attempting token refresh and retrying...')
+                    # 刷新令牌后重新尝试
                     await self._ensure_token(force_refresh=True)
                     async for event in self._stream_api_real(method, model, body, True, retry_count):
                         yield event
@@ -376,8 +381,8 @@ class KiroStreamService(KiroBaseService):
                     # 禁用当前账号
                     self._disable_current_account()
                     # 切换到下一个账号
-                    switched = await self._switch_to_next_account()
-                    if switched:
+                    switched_account = await self._switch_to_next_account()
+                    if switched_account:
                         # 切换账号后重新尝试
                         await self._ensure_token(force_refresh=True)
                         async for event in self._stream_api_real(method, model, body, False, retry_count):
