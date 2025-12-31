@@ -13,6 +13,7 @@ from app.db.init_data import init_default_user
 from app.api.management import router as management_router
 from app.services.heartbeat import heartbeat_service
 from app.services.account_pool import initialize_pool, close_redis
+from app.services.proxy_pool import initialize_pool as initialize_proxy_pool, close_redis as close_proxy_redis
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -39,6 +40,10 @@ async def lifespan(app: FastAPI):
     # 初始化账号池
     await initialize_pool()
     logger.info('Account pool initialized')
+
+    # 初始化代理池
+    await initialize_proxy_pool()
+    logger.info('Proxy pool initialized')
     # 初始化并启动心跳服务
     heartbeat_service.init_app(app)
     heartbeat_service.start()
