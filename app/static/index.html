@@ -191,6 +191,48 @@
             cursor: pointer;
         }
 
+        /* 分页控件样式 */
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: white;
+            margin-top: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .pagination-info {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .pagination-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-pagination {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn-pagination:hover:not(:disabled) {
+            background: #5568d3;
+        }
+
+        .btn-pagination:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
         /* 模态框样式 */
         .modal {
             display: none;
@@ -407,6 +449,8 @@
                         <tbody></tbody>
                     </table>
                 </div>
+                <!-- 分页控件 -->
+                <div id="accounts-pagination" class="pagination-container"></div>
             </div>
 
             <!-- API Key管理页面 -->

@@ -5,7 +5,7 @@ import logging
 from typing import Optional, Dict, List
 import redis
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 
 from ..db.database import AsyncSessionLocal
@@ -158,7 +158,14 @@ async def create_proxy(proxy_type: str, proxy_url: str, proxy_port: Optional[int
     """创建代理"""
     try:
         async with AsyncSessionLocal() as db:
+            # 统计代理数量
+            count_stmt = select(func.count(Proxy.id))
+            count_result = await db.execute(count_stmt)
+            total_count = count_result.scalar() or 0
+            
+            # 创建代理，id设置为总数量+1
             db_proxy = Proxy(
+                id=total_count + 1,
                 proxy_type=proxy_type,
                 proxy_url=proxy_url,
                 proxy_port=proxy_port,
@@ -345,6 +352,11 @@ async def import_proxies(proxies: List[Dict]) -> Dict:
 
     try:
         async with AsyncSessionLocal() as db:
+            # 统计当前代理数量
+            count_stmt = select(func.count(Proxy.id))
+            count_result = await db.execute(count_stmt)
+            total_count = count_result.scalar() or 0
+            
             for idx, proxy_data in enumerate(proxies, 1):
                 try:
                     proxy_type = proxy_data.get("proxy_type", "http")
@@ -353,7 +365,9 @@ async def import_proxies(proxies: List[Dict]) -> Dict:
                     username = proxy_data.get("username")
                     password = proxy_data.get("password")
 
+                    # 创建代理，id设置为当前总数+idx
                     db_proxy = Proxy(
+                        id=total_count + idx,
                         proxy_type=proxy_type,
                         proxy_url=proxy_url,
                         proxy_port=proxy_port,

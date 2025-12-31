@@ -139,6 +139,7 @@ async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)):
 
 
 
+@router.post("/apikeys", response_model=ApiKeyResponse)
 async def create_apikey(apikey: ApiKeyCreate, db: AsyncSession = Depends(get_db)):
     """创建API Key"""
     # 检查API Key是否已存在
@@ -197,6 +198,18 @@ async def update_apikey(apikey_id: int, apikey_update: ApiKeyUpdate, db: AsyncSe
             status_code=status.HTTP_404_NOT_FOUND,
             detail="API Key不存在"
         )
+
+    # 如果要更新api_key，检查新的api_key是否与其他记录重复
+    if apikey_update.api_key is not None and apikey_update.api_key != apikey.api_key:
+        stmt = select(ApiKey).filter(ApiKey.api_key == apikey_update.api_key)
+        result = await db.execute(stmt)
+        existing_apikey = result.scalars().first()
+        if existing_apikey:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="API Key已存在"
+            )
+        apikey.api_key = apikey_update.api_key
 
     if apikey_update.description is not None:
         apikey.description = apikey_update.description
@@ -461,4 +474,57 @@ async def import_accounts_endpoint(accounts: List[dict]):
             detail=f"批量导入账号失败: {str(e)}"
         )
 
+
+@router.post("/system/sync-sequences")
+async def sync_sequences_endpoint():
+    """同步数据库序列，解决ID冲突问题"""
+    try:
+        from ..db.sync_sequences import sync_all_sequences
+        success = await sync_all_sequences()
+        if success:
+            return {"message": "数据库序列同步成功"}
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="数据库序列同步失败"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"同步序列失败: {str(e)}"
+        )
+
+
+@router.post("/system/check-sequences")
+async def check_sequences_endpoint():
+    """检查数据库序列状态"""
+    try:
+        from ..db.check_sequences import check_sequences
+        await check_sequences()
+        return {"message": "序列状态检查完成"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"检查序列失败: {str(e)}"
+        )
+
+
+@router.post("/system/force-sync-sequences")
+async def force_sync_sequences_endpoint():
+    """强制同步数据库序列"""
+    try:
+        from ..db.check_sequences import force_sync_sequences
+        success = await force_sync_sequences()
+        if success:
+            return {"message": "数据库序列强制同步成功"}
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="数据库序列强制同步失败"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"强制同步序列失败: {str(e)}"
+        )
 

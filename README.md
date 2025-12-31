@@ -42,11 +42,33 @@ kiro-api-fastapi/
 # 服务器配置
 HOST=0.0.0.0
 SERVER_PORT=5431
-REQUIRED_API_KEY=your_api_key_here
+REQUIRED_API_KEY=123456
 
 # 代理配置
-PROXY_SERVER=http://127.0.0.1:10809
-USE_SYSTEM_PROXY_KIRO=true
+PROXY_SERVER=
+USE_SYSTEM_PROXY_KIRO=false
+
+# Redis 配置
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_PASSWORD=
+REDIS_MAX_CONNECTIONS=50
+
+# PostgreSQL 配置
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=1234
+POSTGRES_DB=postgres
+POSTGRES_POOL_SIZE=20
+POSTGRES_MAX_OVERFLOW=10
+POSTGRES_POOL_RECYCLE=3600
+
+# 账号池配置
+POOL_SIZE=10
+ACCOUNT_TIMEOUT=30
+HEALTH_CHECK_INTERVAL=300
 
 # Kiro OAuth配置（二选一）
 KIRO_OAUTH_CREDS_BASE64=your_base64_encoded_credentials
@@ -60,11 +82,43 @@ REQUEST_BASE_DELAY=1000
 # 日志配置
 PROMPT_LOG_MODE=none
 PROMPT_LOG_BASE_NAME=prompt_log
-
-# 数据库配置（可选，默认使用 SQLite）
-DB_PATH=./kiro_management.db
-# 如需使用 PostgreSQL 或 MySQL 以获得更好的连接池支持，请修改 app/db/database.py 中的数据库 URL
 ```
+
+### 数据库说明
+
+本项目使用PostgreSQL作为默认数据库，支持高并发场景。
+
+#### 使用Docker Compose启动
+
+```bash
+docker-compose up -d
+```
+
+这将自动启动以下服务：
+- PostgreSQL数据库（端口5432）
+- Redis缓存（端口6379）
+- API应用（端口5431）
+
+#### 手动启动PostgreSQL
+
+Windows:
+```bash
+start_postgres.bat
+```
+
+Linux/Mac:
+```bash
+chmod +x start_postgres.sh
+./start_postgres.sh
+```
+
+#### 连接到PostgreSQL
+
+```bash
+docker exec -it kiro-postgres psql -U postgres
+```
+
+详细的PostgreSQL配置说明请参考 [POSTGRES_GUIDE.md](POSTGRES_GUIDE.md)
 
 ## 安装与运行
 

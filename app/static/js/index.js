@@ -559,7 +559,10 @@ window.importAccounts = async function(fileInput) {
         if (response.ok) {
             const result = await response.json();
             showSuccess(result.message);
-            loadAccounts();
+            // 导入成功后跳转到第一页
+            if (typeof loadAccounts === 'function') {
+                loadAccounts(1);
+            }
 
             // 如果有错误，显示错误信息
             if (result.errors && result.errors.length > 0) {

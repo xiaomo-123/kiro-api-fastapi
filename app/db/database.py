@@ -1,24 +1,23 @@
 # 数据库配置和初始化
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
 from .models import Base
-import os
+from ..config import settings
 
-# SQLite数据库文件路径，支持通过环境变量配置
-DB_PATH = os.getenv("DB_PATH", "./kiro_management.db")
-# 异步数据库 URL
-SQLALCHEMY_DATABASE_URL = f"sqlite+aiosqlite:///{DB_PATH}"
+# PostgreSQL数据库URL
+SQLALCHEMY_DATABASE_URL = f"postgresql+asyncpg://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
 
 # 创建异步数据库引擎
-# 注意：SQLite 使用 NullPool，不支持 pool_size 和 max_overflow 参数
-# 如果需要连接池，建议使用 PostgreSQL 或 MySQL
+# 使用PostgreSQL连接池提升并发性能
 engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
-    connect_args={
-        "check_same_thread": False,
-    },
-    echo=False,                # 不输出SQL日志
-    future=True                # 使用 SQLAlchemy 2.0 风格
+    pool_size=settings.POSTGRES_POOL_SIZE,
+    max_overflow=settings.POSTGRES_MAX_OVERFLOW,
+    pool_pre_ping=True,
+    pool_recycle=settings.POSTGRES_POOL_RECYCLE,
+    echo=False,
+    future=True
 )
 
 # 创建异步会话工厂
@@ -37,6 +36,12 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine.sync_
 async def init_db():
     """初始化数据库，创建所有表"""
     async with engine.begin() as conn:
+        # 先创建序列（分别执行每个语句）
+        await conn.execute(text("CREATE SEQUENCE IF NOT EXISTS users_id_seq START 1"))
+        await conn.execute(text("CREATE SEQUENCE IF NOT EXISTS accounts_id_seq START 1"))
+        await conn.execute(text("CREATE SEQUENCE IF NOT EXISTS api_keys_id_seq START 1"))
+        await conn.execute(text("CREATE SEQUENCE IF NOT EXISTS proxies_id_seq START 1"))
+        # 然后创建表
         await conn.run_sync(Base.metadata.create_all)
 
 

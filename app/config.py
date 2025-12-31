@@ -23,6 +23,16 @@ class Settings(BaseSettings):
     REDIS_PASSWORD: Optional[str] = None
     REDIS_MAX_CONNECTIONS: int = 50
 
+    # PostgreSQL 配置
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "1234"
+    POSTGRES_DB: str = "postgres"
+    POSTGRES_POOL_SIZE: int = 20
+    POSTGRES_MAX_OVERFLOW: int = 10
+    POSTGRES_POOL_RECYCLE: int = 3600
+
     # 账号池配置
     POOL_SIZE: int = 10
     ACCOUNT_TIMEOUT: int = 30

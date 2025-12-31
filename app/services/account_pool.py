@@ -5,7 +5,7 @@ import logging
 from typing import Optional, Dict, List
 import redis
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 
 from ..db.database import AsyncSessionLocal
@@ -242,9 +242,29 @@ async def health_check():
 async def create_account(account_data: str, status: str = "1", description: str = "") -> Optional[Account]:
     """创建账号"""
     try:
+        # 处理account_data，移除id字段
+        processed_account_data = account_data
+        try:
+            # 尝试解析为JSON
+            data_dict = json.loads(account_data)
+            if isinstance(data_dict, dict) and 'id' in data_dict:
+                # 移除id字段
+                data_dict_without_id = {k: v for k, v in data_dict.items() if k != 'id'}
+                processed_account_data = json.dumps(data_dict_without_id)
+        except (json.JSONDecodeError, TypeError):
+            # 不是JSON格式，保持原样
+            pass
+
         async with AsyncSessionLocal() as db:
+            # 统计账号数量
+            count_stmt = select(func.count(Account.id))
+            count_result = await db.execute(count_stmt)
+            total_count = count_result.scalar() or 0
+            
+            # 创建账号，id设置为总数量+1
             db_account = Account(
-                account=account_data,
+                id=total_count + 1,
+                account=processed_account_data,
                 status=status,
                 description=description
             )
@@ -405,11 +425,23 @@ async def import_accounts(accounts: List[Dict]) -> Dict:
     
     try:
         async with AsyncSessionLocal() as db:
+            # 统计当前账号数量
+            count_stmt = select(func.count(Account.id))
+            count_result = await db.execute(count_stmt)
+            total_count = count_result.scalar() or 0
+            
             for idx, account_data in enumerate(accounts, 1):
                 try:
-                    account_str = json.dumps(account_data) if isinstance(account_data, dict) else str(account_data)
+                    # 移除account_data中的id字段，让数据库自动生成ID
+                    if isinstance(account_data, dict) and 'id' in account_data:
+                        account_data_without_id = {k: v for k, v in account_data.items() if k != 'id'}
+                        account_str = json.dumps(account_data_without_id)
+                    else:
+                        account_str = json.dumps(account_data) if isinstance(account_data, dict) else str(account_data)
                     
+                    # 创建账号，id设置为当前总数+idx
                     db_account = Account(
+                        id=total_count + idx,
                         account=account_str,
                         status="1",
                         description=f"导入自JSON - 第{idx}条"

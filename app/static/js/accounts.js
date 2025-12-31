@@ -1,8 +1,20 @@
 // 账号管理模块
-export async function loadAccounts() {
+// 分页状态
+let currentPage = 1;
+let pageSize = 50;
+let totalPages = 1;
+
+export async function loadAccounts(page = 1) {
     try {
-        const response = await fetch('/api/management/accounts');
-        const accounts = await response.json();
+        const skip = (page - 1) * pageSize;
+        const response = await fetch(`/api/management/accounts?skip=${skip}&limit=${pageSize}`);
+        const data = await response.json();
+        const accounts = Array.isArray(data) ? data : [];
+        
+        // 计算总页数（这里假设总记录数，实际可能需要额外的API获取总数）
+        // 如果返回的数据少于pageSize，说明是最后一页
+        totalPages = accounts.length < pageSize ? page : Math.ceil((skip + accounts.length + pageSize) / pageSize);
+        currentPage = page;
 
         const tbody = document.querySelector('#accounts-table tbody');
         tbody.innerHTML = '';
@@ -77,7 +89,7 @@ export function initAccountForm() {
 
             if (response.ok) {
                 closeModal('accounts');
-                loadAccounts();
+                loadAccounts(currentPage);
                 showSuccess('操作成功');
             } else {
                 const data = await response.json();
@@ -121,7 +133,7 @@ export async function deleteAccount(id) {
         });
 
         if (response.ok) {
-            loadAccounts();
+            loadAccounts(currentPage);
             showSuccess('删除成功');
         } else {
             const data = await response.json();
@@ -170,7 +182,7 @@ window.deleteSelectedAccounts = async function() {
         if (response.ok) {
             const result = await response.json();
             showSuccess(result.message);
-            loadAccounts();
+            loadAccounts(currentPage);
         } else {
             const data = await response.json();
             showError(data.detail || '批量删除失败');
@@ -179,4 +191,47 @@ window.deleteSelectedAccounts = async function() {
         console.error('批量删除失败:', error);
         showError('批量删除失败');
     }
+};
+
+// 分页控制函数
+window.goToPage = function(page) {
+    if (page < 1 || page > totalPages) {
+        return;
+    }
+    loadAccounts(page);
+};
+
+window.goToPreviousPage = function() {
+    if (currentPage > 1) {
+        loadAccounts(currentPage - 1);
+    }
+};
+
+window.goToNextPage = function() {
+    if (currentPage < totalPages) {
+        loadAccounts(currentPage + 1);
+    }
+};
+
+// 更新分页显示
+function updatePaginationDisplay() {
+    const paginationContainer = document.getElementById('accounts-pagination');
+    if (!paginationContainer) return;
+    
+    paginationContainer.innerHTML = `
+        <div class="pagination-info">
+            第 ${currentPage} / ${totalPages} 页
+        </div>
+        <div class="pagination-controls">
+            <button class="btn-pagination" onclick="goToPreviousPage()" ${currentPage === 1 ? 'disabled' : ''}>前一页</button>
+            <button class="btn-pagination" onclick="goToNextPage()" ${currentPage === totalPages ? 'disabled' : ''}>后一页</button>
+        </div>
+    `;
+}
+
+// 修改loadAccounts函数，在加载数据后更新分页显示
+const originalLoadAccounts = loadAccounts;
+loadAccounts = async function(page = 1) {
+    await originalLoadAccounts(page);
+    updatePaginationDisplay();
 };

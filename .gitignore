@@ -1,7 +1,8 @@
 # Dependencies
 node_modules
 *.bat
-
+kiro_management.db
+*.md
 yarn.lock
 package-lock.json
 proxy copy.yaml
