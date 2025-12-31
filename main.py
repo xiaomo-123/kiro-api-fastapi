@@ -1,4 +1,3 @@
-
 # 应用入口
 import logging
 from contextlib import asynccontextmanager
@@ -12,11 +11,9 @@ from app.services.kiro_service import get_kiro_service
 from app.db.database import init_db
 from app.db.init_data import init_default_user
 from app.api.management import router as management_router
-from app.api.pool import router as pool_router
 from app.services.heartbeat import heartbeat_service
 from app.services.account_pool import initialize_pool, close_redis
 from app.services.proxy_pool import initialize_pool as initialize_proxy_pool, close_redis as close_proxy_redis
-
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -39,7 +36,7 @@ async def lifespan(app: FastAPI):
     # 初始化默认管理员用户
     await init_default_user()
     logger.info('Default admin user initialized')
-
+    
     # 初始化账号池
     await initialize_pool()
     logger.info('Account pool initialized')
@@ -47,7 +44,6 @@ async def lifespan(app: FastAPI):
     # 初始化代理池
     await initialize_proxy_pool()
     logger.info('Proxy pool initialized')
-
     # 初始化并启动心跳服务
     heartbeat_service.init_app(app)
     heartbeat_service.start()
@@ -69,15 +65,11 @@ async def lifespan(app: FastAPI):
     # 关闭数据库引擎
     from app.db.database import engine
     await engine.dispose()
-    # 关闭 Redis 连接
-    close_redis()
-    close_proxy_redis()
     # 尝试关闭Kiro服务（如果已初始化）
     kiro_service = get_kiro_service()
     if kiro_service.is_initialized:
         await kiro_service.close()
     logger.info('Application shutdown complete')
-
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -103,8 +95,6 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # 注册路由
 app.include_router(messages_router)
 app.include_router(management_router, prefix="/api/management", tags=["管理"])
-app.include_router(pool_router, prefix="/api/pool", tags=["账号池"])
-
 
 @app.get('/')
 async def root():
@@ -131,9 +121,25 @@ async def health_check():
 
 if __name__ == '__main__':
     import uvicorn
+    import os
+
+    # 尝试使用 uvloop 和 httptools 提升性能
+    try:
+        import uvloop
+        uvloop.install()
+        logger.info('uvloop installed and enabled')
+    except ImportError:
+        logger.info('uvloop not available, using default event loop')
+
+    # 配置 uvicorn
     uvicorn.run(
         'main:app',
         host=settings.HOST,
         port=settings.SERVER_PORT,
-        log_level='info'
+        log_level='info',
+        loop='uvloop' if os.name != 'nt' else None,  # Windows 不支持 uvloop
+        access_log=True,
+        use_colors=True,
+        limit_concurrency=1000,
+        timeout_keep_alive=5
     )
