@@ -16,6 +16,18 @@ class Settings(BaseSettings):
     PROXY_SERVER: Optional[str] = None
     USE_SYSTEM_PROXY_KIRO: bool = False
 
+    # Redis 配置
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: Optional[str] = None
+    REDIS_MAX_CONNECTIONS: int = 50
+
+    # 账号池配置
+    POOL_SIZE: int = 10
+    ACCOUNT_TIMEOUT: int = 30
+    HEALTH_CHECK_INTERVAL: int = 300
+
     # Kiro OAuth 配置
     KIRO_OAUTH_CREDS_BASE64: Optional[str] = None
     KIRO_OAUTH_CREDS_FILE_PATH: Optional[str] = None

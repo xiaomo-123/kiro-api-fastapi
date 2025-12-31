@@ -1,0 +1,473 @@
+# 账号池管理服务
+import json
+import time
+import logging
+from typing import Optional, Dict, List
+import redis
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+
+from ..db.database import AsyncSessionLocal
+from ..db.models import Account
+from ..config import settings
+
+logger = logging.getLogger(__name__)
+
+# Redis 连接池
+redis_pool = None
+redis_client = None
+
+def init_redis():
+    """初始化 Redis 连接"""
+    global redis_pool, redis_client
+    if redis_client is None:
+        try:
+            redis_pool = redis.ConnectionPool(
+                host=getattr(settings, "REDIS_HOST", "localhost"),
+                port=getattr(settings, "REDIS_PORT", 6379),
+                db=getattr(settings, "REDIS_DB", 0),
+                password=getattr(settings, "REDIS_PASSWORD", None),
+                max_connections=50,
+                decode_responses=True,
+                socket_timeout=5,
+                socket_connect_timeout=5,
+                retry_on_timeout=True
+            )
+            redis_client = redis.Redis(connection_pool=redis_pool)
+            redis_client.ping()
+            logger.info("Redis connected successfully")
+        except Exception as e:
+            logger.warning(f"Redis connection failed: {e}, falling back to SQLite only mode")
+            redis_client = None
+
+async def initialize_pool():
+    """初始化账号池"""
+    init_redis()
+    
+    if redis_client is None:
+        logger.warning("Redis not available, using SQLite only mode")
+        return
+    
+    try:
+        async with AsyncSessionLocal() as db:
+            stmt = select(Account).filter(Account.status == "1")
+            result = await db.execute(stmt)
+            accounts = result.scalars().all()
+            
+            if not accounts:
+                logger.warning("No enabled accounts found in database")
+                return
+            
+            pipe = redis_client.pipeline()
+            pipe.delete("available_accounts")
+            
+            for account in accounts:
+                account_key = f"account_pool:{account.id}"
+                pipe.hset(account_key, "id", str(account.id))
+                pipe.hset(account_key, "account", account.account)
+                pipe.hset(account_key, "status", "1")
+                pipe.hset(account_key, "last_used", "0")
+                pipe.hset(account_key, "usage_count", "0")
+                pipe.hset(account_key, "error_count", "0")
+                pipe.hset(account_key, "health_score", "100")
+                pipe.zadd("available_accounts", {str(account.id): 100})
+            
+            pipe.execute()
+            logger.info(f"Initialized pool with {len(accounts)} accounts")
+    except Exception as e:
+        logger.error(f"Failed to initialize account pool: {e}")
+
+async def get_available_account() -> Optional[Dict]:
+    """获取可用账号"""
+    if redis_client is None:
+        return await _get_account_from_sqlite()
+    
+    try:
+        account_id = redis_client.zrevrange("available_accounts", 0, 0)
+        if not account_id:
+            return None
+        
+        lock_key = f"account_lock:{account_id[0]}"
+        if redis_client.exists(lock_key):
+            return None
+        
+        redis_client.setex(lock_key, 30, str(time.time()))
+        account_key = f"account_pool:{account_id[0]}"
+        account_data = redis_client.hgetall(account_key)
+        redis_client.hset(account_key, "status", "2")
+        
+        if account_data:
+            logger.debug(f"Got account {account_id[0]} from pool")
+            return account_data
+        
+        return None
+    except Exception as e:
+        logger.error(f"Failed to get account from pool: {e}")
+        return await _get_account_from_sqlite()
+
+async def release_account(account_id: int, success: bool = True, response_time: float = 0):
+    """释放账号"""
+    if redis_client is None:
+        return
+    
+    try:
+        account_key = f"account_pool:{account_id}"
+        redis_client.delete(f"account_lock:{account_id}")
+        
+        pipe = redis_client.pipeline()
+        pipe.hincrby(account_key, "usage_count", 1)
+        pipe.hset(account_key, "last_used", str(time.time()))
+        
+        if success:
+            pipe.hincrby(account_key, "health_score", 5)
+            pipe.hset(account_key, "error_count", "0")
+        else:
+            pipe.hincrby(account_key, "error_count", 1)
+            pipe.hincrby(account_key, "health_score", -10)
+        
+        pipe.execute()
+        
+        health_score = int(redis_client.hget(account_key, "health_score") or "0")
+        health_score = max(0, min(100, health_score))
+        redis_client.hset(account_key, "health_score", str(health_score))
+        
+        if health_score > 30:
+            redis_client.zadd("available_accounts", {str(account_id): health_score})
+        
+        redis_client.hset(account_key, "status", "1")
+        logger.debug(f"Released account {account_id}, success={success}, health_score={health_score}")
+    except Exception as e:
+        logger.error(f"Failed to release account {account_id}: {e}")
+
+async def update_account(account_id: int, account_data: Dict):
+    """更新账号信息"""
+    try:
+        async with AsyncSessionLocal() as db:
+            stmt = select(Account).filter(Account.id == account_id)
+            result = await db.execute(stmt)
+            account = result.scalars().first()
+            
+            if account:
+                for key, value in account_data.items():
+                    setattr(account, key, value)
+                await db.commit()
+                logger.info(f"Updated account {account_id} in SQLite")
+        
+        if redis_client is not None:
+            account_key = f"account_pool:{account_id}"
+            
+            if "account" in account_data:
+                redis_client.hset(account_key, "account", json.dumps(account_data["account"]))
+            
+            if "status" in account_data:
+                redis_client.hset(account_key, "status", str(account_data["status"]))
+                
+                if account_data["status"] == "1":
+                    redis_client.zadd("available_accounts", {str(account_id): 100})
+                else:
+                    redis_client.zrem("available_accounts", str(account_id))
+            
+            logger.info(f"Updated account {account_id} in Redis")
+    except Exception as e:
+        logger.error(f"Failed to update account {account_id}: {e}")
+
+async def get_pool_status() -> Dict:
+    """获取账号池状态"""
+    status = {
+        "total_accounts": 0,
+        "available_accounts": 0,
+        "in_use_accounts": 0,
+        "average_health_score": 0
+    }
+    
+    if redis_client is None:
+        return status
+    
+    try:
+        status["available_accounts"] = redis_client.zcard("available_accounts")
+        account_ids = redis_client.keys("account_pool:*")
+        status["total_accounts"] = len(account_ids)
+        
+        if account_ids:
+            total_health = 0
+            for account_id in account_ids:
+                health_score = int(redis_client.hget(account_id, "health_score") or "0")
+                total_health += health_score
+                
+                if redis_client.hget(account_id, "status") == "2":
+                    status["in_use_accounts"] += 1
+            
+            status["average_health_score"] = total_health / len(account_ids) if account_ids else 0
+        
+        return status
+    except Exception as e:
+        logger.error(f"Failed to get pool status: {e}")
+        return status
+
+async def health_check():
+    """定期健康检查"""
+    if redis_client is None:
+        return
+    
+    try:
+        account_ids = redis_client.keys("account_pool:*")
+        
+        for account_id in account_ids:
+            account_key = account_id
+            error_count = int(redis_client.hget(account_key, "error_count") or "0")
+            health_score = int(redis_client.hget(account_key, "health_score") or "0")
+            
+            if error_count >= 5 or health_score < 20:
+                redis_client.hset(account_key, "status", "0")
+                redis_client.zrem("available_accounts", account_id.replace("account_pool:", ""))
+                logger.warning(f"Disabled account {account_id} due to poor health")
+            elif health_score > 50 and redis_client.hget(account_key, "status") == "0":
+                redis_client.hset(account_key, "status", "1")
+                redis_client.zadd("available_accounts", {account_id.replace("account_pool:", ""): health_score})
+                logger.info(f"Re-enabled account {account_id}")
+        
+        logger.info("Health check completed")
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+
+async def create_account(account_data: str, status: str = "1", description: str = "") -> Optional[Account]:
+    """创建账号"""
+    try:
+        async with AsyncSessionLocal() as db:
+            db_account = Account(
+                account=account_data,
+                status=status,
+                description=description
+            )
+            db.add(db_account)
+            await db.commit()
+            await db.refresh(db_account)
+            
+            if redis_client is not None and status == "1":
+                account_key = f"account_pool:{db_account.id}"
+                redis_client.hset(account_key, "id", str(db_account.id))
+                redis_client.hset(account_key, "account", account_data)
+                redis_client.hset(account_key, "status", "1")
+                redis_client.hset(account_key, "last_used", "0")
+                redis_client.hset(account_key, "usage_count", "0")
+                redis_client.hset(account_key, "error_count", "0")
+                redis_client.hset(account_key, "health_score", "100")
+                redis_client.zadd("available_accounts", {str(db_account.id): 100})
+            
+            logger.info(f"Created account {db_account.id}")
+            return db_account
+            
+    except Exception as e:
+        logger.error(f"Failed to create account: {e}")
+        raise
+
+async def get_accounts(skip: int = 0, limit: int = 100) -> List[Account]:
+    """获取账号列表"""
+    try:
+        async with AsyncSessionLocal() as db:
+            stmt = select(Account).offset(skip).limit(limit)
+            result = await db.execute(stmt)
+            return result.scalars().all()
+    except Exception as e:
+        logger.error(f"Failed to get accounts: {e}")
+        return []
+
+async def get_account(account_id: int) -> Optional[Account]:
+    """获取单个账号"""
+    try:
+        async with AsyncSessionLocal() as db:
+            stmt = select(Account).filter(Account.id == account_id)
+            result = await db.execute(stmt)
+            return result.scalars().first()
+    except Exception as e:
+        logger.error(f"Failed to get account {account_id}: {e}")
+        return None
+
+async def update_account(account_id: int, account_data: Optional[str] = None, status: Optional[str] = None, description: Optional[str] = None) -> Optional[Account]:
+    """更新账号"""
+    try:
+        async with AsyncSessionLocal() as db:
+            stmt = select(Account).filter(Account.id == account_id)
+            result = await db.execute(stmt)
+            account = result.scalars().first()
+            
+            if not account:
+                return None
+            
+            if account_data is not None:
+                account.account = account_data
+            if status is not None:
+                account.status = status
+            if description is not None:
+                account.description = description
+            
+            await db.commit()
+            await db.refresh(account)
+            
+            if redis_client is not None:
+                account_key = f"account_pool:{account_id}"
+                
+                if account_data is not None:
+                    redis_client.hset(account_key, "account", account_data)
+                
+                if status is not None:
+                    redis_client.hset(account_key, "status", status)
+                    
+                    if status == "1":
+                        redis_client.zadd("available_accounts", {str(account_id): 100})
+                    else:
+                        redis_client.zrem("available_accounts", str(account_id))
+                
+                if description is not None:
+                    redis_client.hset(account_key, "description", description)
+            
+            logger.info(f"Updated account {account_id}")
+            return account
+            
+    except Exception as e:
+        logger.error(f"Failed to update account {account_id}: {e}")
+        raise
+
+async def delete_account(account_id: int) -> bool:
+    """删除账号"""
+    try:
+        async with AsyncSessionLocal() as db:
+            stmt = select(Account).filter(Account.id == account_id)
+            result = await db.execute(stmt)
+            account = result.scalars().first()
+            
+            if not account:
+                return False
+            
+            await db.delete(account)
+            await db.commit()
+            
+            if redis_client is not None:
+                account_key = f"account_pool:{account_id}"
+                redis_client.delete(account_key)
+                redis_client.zrem("available_accounts", str(account_id))
+            
+            logger.info(f"Deleted account {account_id}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Failed to delete account {account_id}: {e}")
+        return False
+
+async def batch_delete_accounts(account_ids: List[int]) -> Dict:
+    """批量删除账号"""
+    try:
+        async with AsyncSessionLocal() as db:
+            stmt = select(Account).filter(Account.id.in_(account_ids))
+            result = await db.execute(stmt)
+            accounts = result.scalars().all()
+            
+            if not accounts:
+                return {"deleted_count": 0, "message": "未找到要删除的账号"}
+            
+            for account in accounts:
+                await db.delete(account)
+            
+            await db.commit()
+            
+            if redis_client is not None:
+                pipe = redis_client.pipeline()
+                for account_id in account_ids:
+                    account_key = f"account_pool:{account_id}"
+                    pipe.delete(account_key)
+                    pipe.zrem("available_accounts", str(account_id))
+                pipe.execute()
+            
+            logger.info(f"Deleted {len(accounts)} accounts")
+            return {
+                "deleted_count": len(accounts),
+                "message": f"成功删除 {len(accounts)} 个账号"
+            }
+            
+    except Exception as e:
+        logger.error(f"Failed to batch delete accounts: {e}")
+        raise
+
+async def import_accounts(accounts: List[Dict]) -> Dict:
+    """批量导入账号"""
+    success_count = 0
+    error_count = 0
+    errors = []
+    
+    try:
+        async with AsyncSessionLocal() as db:
+            for idx, account_data in enumerate(accounts, 1):
+                try:
+                    account_str = json.dumps(account_data) if isinstance(account_data, dict) else str(account_data)
+                    
+                    db_account = Account(
+                        account=account_str,
+                        status="1",
+                        description=f"导入自JSON - 第{idx}条"
+                    )
+                    db.add(db_account)
+                    await db.commit()
+                    success_count += 1
+                    
+                    if redis_client is not None:
+                        account_key = f"account_pool:{db_account.id}"
+                        redis_client.hset(account_key, "id", str(db_account.id))
+                        redis_client.hset(account_key, "account", account_str)
+                        redis_client.hset(account_key, "status", "1")
+                        redis_client.hset(account_key, "last_used", "0")
+                        redis_client.hset(account_key, "usage_count", "0")
+                        redis_client.hset(account_key, "error_count", "0")
+                        redis_client.hset(account_key, "health_score", "100")
+                        redis_client.zadd("available_accounts", {str(db_account.id): 100})
+                    
+                except Exception as e:
+                    error_count += 1
+                    errors.append(f"第{idx}条导入失败: {str(e)}")
+                    await db.rollback()
+        
+        return {
+            "message": f"导入完成，成功{success_count}条，失败{error_count}条",
+            "success_count": success_count,
+            "error_count": error_count,
+            "errors": errors
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to import accounts: {e}")
+        raise
+
+async def _get_account_from_sqlite() -> Optional[Dict]:
+    """从 SQLite 获取账号"""
+    try:
+        async with AsyncSessionLocal() as db:
+            stmt = select(Account).filter(Account.status == "1").order_by(Account.id)
+            result = await db.execute(stmt)
+            account = result.scalars().first()
+            
+            if account:
+                return {
+                    "id": str(account.id),
+                    "account": account.account,
+                    "status": "1",
+                    "last_used": "0",
+                    "usage_count": "0",
+                    "error_count": "0",
+                    "health_score": "100"
+                }
+            
+            return None
+    except Exception as e:
+        logger.error(f"Failed to get account from SQLite: {e}")
+        return None
+
+def close_redis():
+    """关闭 Redis 连接"""
+    global redis_client, redis_pool
+    if redis_client:
+        redis_client.close()
+        redis_client = None
+    if redis_pool:
+        redis_pool.disconnect()
+        redis_pool = None
+    logger.info("Redis connection closed")
