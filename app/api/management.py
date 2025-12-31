@@ -117,27 +117,37 @@ async def create_account(account: AccountCreate, db: Session = Depends(get_db)):
         import json
         account_data = json.loads(account.account)
         
-        # 验证必需字段
-        required_fields = ['accessToken', 'refreshToken', 'profileArn']
-        optional_fields = ['clientId', 'clientSecret']
-        missing_fields = [field for field in required_fields if field not in account_data]
-        if missing_fields:
+        # 检查账号是否已存在
+        existing_account = db.query(Account).first()
+        if existing_account:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"账号数据缺少必需字段: {missing_fields}"
+                detail="账号已存在"
+            )
+
+        # 验证必填字段不为空
+        if not account_data.get('accessToken') or not account_data.get('refreshToken'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="accessToken和refreshToken不能为空"
             )
         
-        # 验证expiresAt字段（如果存在）
-        if 'expiresAt' in account_data:
-            try:
-                from datetime import datetime
-                datetime.fromisoformat(account_data['expiresAt'].replace('Z', '+00:00'))
-            except Exception:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="expiresAt字段格式无效，应为ISO 8601格式"
-                )
+
         
+        # 设置默认值
+        if 'authMethod' not in account_data:
+            account_data['authMethod'] = 'social'
+
+        if 'profileArn' not in account_data:
+            account_data['profileArn'] = "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK"''
+
+        if 'expiresAt' not in account_data:
+            from datetime import datetime
+            account_data['expiresAt'] = datetime.utcnow().isoformat() + 'Z'
+
+        # 更新account.account为处理后的数据
+        account.account = json.dumps(account_data)
+
         # 创建账号
         db_account = Account(
             account=account.account,

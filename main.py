@@ -83,6 +83,13 @@ app.include_router(messages_router)
 app.include_router(management_router, prefix="/api/management", tags=["管理"])
 
 
+@app.get('/')
+async def root():
+    """根路径自动跳转到登录页面"""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url='/static/login.html')
+
+
 @app.get('/health')
 async def health_check():
     """健康检查接口"""
