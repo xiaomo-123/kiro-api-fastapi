@@ -24,4 +24,4 @@ COPY main.py .
 EXPOSE 5431
 
 # 启动命令
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5431"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5431", "--log-level", "info", "--access-log"]
