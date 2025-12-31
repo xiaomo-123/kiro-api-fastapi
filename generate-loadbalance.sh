@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY main.py .
 EXPOSE ${SERVER_PORT}
-CMD uvicorn main:app --host 0.0.0.0 --port \${SERVER_PORT}
+CMD sh -c "uvicorn main:app --host 0.0.0.0 --port \${SERVER_PORT}"
 EOF
 
 cat > nginx.conf << EOF
@@ -22,8 +22,7 @@ http {
     upstream kiro_api_backend {
 EOF
 for ((i=1; i<=INSTANCES; i++)); do
-    PORT=$((START_PORT + i - 1))
-    echo "        server kiro-api-$i:$PORT;" >> nginx.conf
+    echo "        server kiro-api-$i:$((START_PORT + i - 1));" >> nginx.conf
 done
 cat >> nginx.conf << 'EOF'
     }

@@ -38,7 +38,7 @@ docker-compose -f docker-compose-loadbalance.yml ps
 
 ### 3. 访问服务
 
-- **负载均衡入口**：http://localhost:5430
+- **负载均衡入口**：http://38.46.219.171:5430
 - **直接访问实例**：
   - 实例1：http://localhost:5431
   - 实例2：http://localhost:5432
