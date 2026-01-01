@@ -262,7 +262,21 @@ class KiroBaseService:
             logger.error(f'[Kiro] Failed to switch to next proxy: {e}')
             return False
 
+    async def _handle_proxy_timeout(self) -> bool:
+        """处理代理超时错误，自动切换到下一个代理
 
+        Returns:
+            bool: 是否成功切换到新代理
+        """
+        if not self.proxy:
+            return False
+
+        logger.warning('[Kiro] Proxy timeout detected, switching to next proxy...')
+        await release_proxy(self.current_proxy_id, success=False)
+        switched = await self._switch_to_next_proxy()
+        if switched:
+            logger.info('[Kiro] Successfully switched to new proxy')
+        return switched
 
     async def _disable_current_account(self) -> bool:
         """禁用当前账号"""

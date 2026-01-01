@@ -104,7 +104,7 @@ async def get_available_proxy() -> Optional[Dict]:
         if redis_client.exists(lock_key):
             return None
 
-        redis_client.setex(lock_key, 30, str(time.time()))
+        redis_client.setex(lock_key, 60, str(time.time()))
         proxy_key = f"proxy_pool:{proxy_id[0]}"
         proxy_data = redis_client.hgetall(proxy_key)
         redis_client.hset(proxy_key, "status", "2")

@@ -485,7 +485,17 @@ class KiroStreamService(KiroBaseService):
                         yield {'type': 'content', 'content': response_data}
 
         except aiohttp.ClientError as e:
+            error_msg = str(e)
             logger.error(f'[Kiro] API call failed: {e}')
+
+            # 如果是代理超时错误，切换到下一个代理
+            if 'Read timed out' in error_msg or 'timeout' in error_msg.lower():
+                if await self._handle_proxy_timeout():
+                    logger.info('[Kiro] Retrying with new proxy...')
+                    async for event in self._stream_api_real(method, model, body, is_retry, retry_count):
+                        yield event
+                    return
+
             raise
 
     async def generate_content_stream(
