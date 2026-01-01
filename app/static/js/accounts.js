@@ -3,11 +3,16 @@
 let currentPage = 1;
 let pageSize = 50;
 let totalPages = 1;
+let currentStatusFilter = ''; // 当前状态筛选值
 
-export async function loadAccounts(page = 1) {
+export async function loadAccounts(page = 1, statusFilter = '') {
     try {
         const skip = (page - 1) * pageSize;
-        const response = await fetch(`/api/management/accounts?skip=${skip}&limit=${pageSize}`);
+        let url = `/api/management/accounts?skip=${skip}&limit=${pageSize}`;
+        if (statusFilter) {
+            url += `&status=${statusFilter}`;
+        }
+        const response = await fetch(url);
         const data = await response.json();
         const accounts = Array.isArray(data) ? data : [];
         
@@ -15,6 +20,7 @@ export async function loadAccounts(page = 1) {
         // 如果返回的数据少于pageSize，说明是最后一页
         totalPages = accounts.length < pageSize ? page : Math.ceil((skip + accounts.length + pageSize) / pageSize);
         currentPage = page;
+        currentStatusFilter = statusFilter;
 
         const tbody = document.querySelector('#accounts-table tbody');
         tbody.innerHTML = '';
@@ -89,7 +95,7 @@ export function initAccountForm() {
 
             if (response.ok) {
                 closeModal('accounts');
-                loadAccounts(currentPage);
+                loadAccounts(currentPage, currentStatusFilter);
                 showSuccess('操作成功');
             } else {
                 const data = await response.json();
@@ -193,23 +199,48 @@ window.deleteSelectedAccounts = async function() {
     }
 };
 
+// 删除所有账号
+window.deleteAllAccounts = async function() {
+    if (!confirm('确定要删除所有账号吗？此操作不可恢复！')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/management/accounts/delete-all', {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            showSuccess(result.message);
+            loadAccounts(1); // 重新加载第一页
+        } else {
+            const data = await response.json();
+            showError(data.detail || '删除所有账号失败');
+        }
+    } catch (error) {
+        console.error('删除所有账号失败:', error);
+        showError('删除所有账号失败');
+    }
+};
+
 // 分页控制函数
 window.goToPage = function(page) {
     if (page < 1 || page > totalPages) {
         return;
     }
-    loadAccounts(page);
+    loadAccounts(page, currentStatusFilter);
 };
 
 window.goToPreviousPage = function() {
     if (currentPage > 1) {
-        loadAccounts(currentPage - 1);
+        loadAccounts(currentPage - 1, currentStatusFilter);
     }
 };
 
 window.goToNextPage = function() {
     if (currentPage < totalPages) {
-        loadAccounts(currentPage + 1);
+        loadAccounts(currentPage + 1, currentStatusFilter);
     }
 };
 
@@ -232,6 +263,54 @@ function updatePaginationDisplay() {
 // 修改loadAccounts函数，在加载数据后更新分页显示
 const originalLoadAccounts = loadAccounts;
 loadAccounts = async function(page = 1) {
-    await originalLoadAccounts(page);
+    await originalLoadAccounts(page, currentStatusFilter);
     updatePaginationDisplay();
+};
+
+// 筛选账号
+window.filterAccountsByStatus = function() {
+    const statusFilter = document.getElementById('account-status-filter').value;
+    currentPage = 1;
+    currentStatusFilter = statusFilter;
+    originalLoadAccounts(1, statusFilter).then(() => {
+        updatePaginationDisplay();
+    });
+};
+
+// 导出账号
+window.exportAccounts = async function() {
+    try {
+        const statusFilter = document.getElementById('account-status-filter').value;
+        let url = '/api/management/accounts/export/json';
+        if (statusFilter) {
+            url += `?status=${statusFilter}`;
+        }
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error('导出失败');
+        }
+        
+        const accounts = await response.json();
+        
+        // 创建Blob对象
+        const blob = new Blob([JSON.stringify(accounts, null, 2)], { type: 'application/json' });
+        
+        // 创建下载链接
+        const url2 = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url2;
+        a.download = `kiro-auth-token-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        
+        // 清理
+        window.URL.revokeObjectURL(url2);
+        document.body.removeChild(a);
+        
+        showSuccess(`成功导出 ${accounts.length} 个账号`);
+    } catch (error) {
+        console.error('导出账号失败:', error);
+        showError('导出账号失败');
+    }
 };

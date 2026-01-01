@@ -1,11 +1,11 @@
 
 # 管理系统API路由（异步版本）
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from passlib.context import CryptContext
-from typing import List
-
+from typing import List, Optional
+import json
 from ..db.database import get_db
 from ..db.models import User, Account, ApiKey, Proxy
 from ..db.schemas import (
@@ -378,10 +378,10 @@ async def create_account_endpoint(account: AccountCreate):
         )
 
 @router.get("/accounts", response_model=List[AccountResponse])
-async def get_accounts_endpoint(skip: int = 0, limit: int = 100):
+async def get_accounts_endpoint(skip: int = 0, limit: int = 100, status: str = None):
     """获取账号列表"""
     try:
-        return await get_accounts(skip=skip, limit=limit)
+        return await get_accounts(skip=skip, limit=limit, status=status)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -431,6 +431,43 @@ async def update_account_endpoint(account_id: int, account_update: AccountUpdate
             detail=f"更新账号失败: {str(e)}"
         )
 
+@router.delete("/accounts/delete-all")
+async def delete_all_accounts_endpoint():
+    """删除所有账号"""
+    try:
+        # 获取所有账号ID
+        all_accounts = await get_accounts(skip=0, limit=10000)
+        account_ids = [account.id for account in all_accounts]
+        
+        if not account_ids:
+            return {"message": "没有账号需要删除"}
+        
+        # 批量删除所有账号
+        result = await batch_delete_accounts(account_ids)
+        return {"message": f"成功删除{result.get('deleted_count', 0)}个账号"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"删除所有账号失败: {str(e)}"
+        )
+
+@router.post("/accounts/batch-delete")
+async def batch_delete_accounts_endpoint(request: AccountBatchDelete):
+    """批量删除账号"""
+    try:
+        return await batch_delete_accounts(request.ids)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量删除账号失败: {str(e)}"
+        )
+
 @router.delete("/accounts/{account_id}")
 async def delete_account_endpoint(account_id: int):
     """删除账号"""
@@ -449,20 +486,6 @@ async def delete_account_endpoint(account_id: int):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"删除账号失败: {str(e)}"
         )
-
-@router.post("/accounts/batch-delete")
-async def batch_delete_accounts_endpoint(request: AccountBatchDelete):
-    """批量删除账号"""
-    try:
-        return await batch_delete_accounts(request.ids)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"批量删除账号失败: {str(e)}"
-        )
-
 @router.post("/accounts/import")
 async def import_accounts_endpoint(accounts: List[dict]):
     """批量导入账号"""
@@ -472,6 +495,38 @@ async def import_accounts_endpoint(accounts: List[dict]):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"批量导入账号失败: {str(e)}"
+        )
+
+
+@router.get("/accounts/export/json")
+async def export_accounts_endpoint(account_status: Optional[str] = Query(None, alias="status")):
+    """导出账号列表为JSON格式"""
+    try:
+        # 获取所有符合条件的账号（不分页）
+        # 使用一个很大的limit值而不是None，避免SQLAlchemy的limit问题
+        accounts = await get_accounts(skip=0, limit=10000, status=account_status)
+        
+        # 解析每个账号的account字段（JSON格式）并导出
+        exported_accounts = []
+        for account in accounts:
+            try:
+                account_data = json.loads(account.account)
+                exported_accounts.append(account_data)
+            except json.JSONDecodeError as e:
+                # 如果解析失败，记录错误并跳过该账号
+                print(f"Failed to parse account {account.id}: {e}")
+                continue
+            except Exception as e:
+                # 其他异常也记录并跳过
+                print(f"Error processing account {account.id}: {e}")
+                continue
+        
+        return exported_accounts
+    except Exception as e:
+        print(f"Export accounts error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出账号失败: {str(e)}"
         )
 
 
@@ -499,7 +554,7 @@ async def sync_sequences_endpoint():
 async def check_sequences_endpoint():
     """检查数据库序列状态"""
     try:
-        from ..db.check_sequences import check_sequences
+        from ..db.sync_sequences import check_sequences
         await check_sequences()
         return {"message": "序列状态检查完成"}
     except Exception as e:
@@ -513,7 +568,7 @@ async def check_sequences_endpoint():
 async def force_sync_sequences_endpoint():
     """强制同步数据库序列"""
     try:
-        from ..db.check_sequences import force_sync_sequences
+        from ..db.sync_sequences import force_sync_sequences
         success = await force_sync_sequences()
         if success:
             return {"message": "数据库序列强制同步成功"}

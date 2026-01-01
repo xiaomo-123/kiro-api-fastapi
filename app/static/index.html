@@ -99,10 +99,43 @@
 
         .page-header {
             margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .page-header h2 {
             color: #333;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .filter-group label {
+            font-weight: 500;
+            color: #555;
+        }
+
+        .filter-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            min-width: 120px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
         }
 
         .btn-add {
@@ -427,11 +460,23 @@
             <div id="page-accounts" class="page">
                 <div class="page-header">
                     <h2>账号管理</h2>
-                    <div>
-                        <input type="file" id="import-file" accept=".json" style="display: none;" onchange="importAccounts(this)">
-                        <button class="btn-add" onclick="document.getElementById('import-file').click()">导入JSON</button>
-                        <button class="btn-add" onclick="openModal('accounts')">添加账号</button>
-                        <button class="btn-delete" onclick="deleteSelectedAccounts()">批量删除</button>
+                    <div class="header-actions">
+                        <div class="filter-group">
+                            <label for="account-status-filter">状态筛选:</label>
+                            <select id="account-status-filter" onchange="filterAccountsByStatus()">
+                                <option value="">全部</option>
+                                <option value="1">启用</option>
+                                <option value="0">禁用</option>
+                            </select>
+                        </div>
+                        <div class="action-buttons">
+                            <input type="file" id="import-file" accept=".json" style="display: none;" onchange="importAccounts(this)">
+                            <button class="btn-add" onclick="document.getElementById('import-file').click()">导入JSON</button>
+                            <button class="btn-add" onclick="exportAccounts()">导出JSON</button>
+                            <button class="btn-add" onclick="openModal('accounts')">添加账号</button>
+                            <button class="btn-delete" onclick="deleteSelectedAccounts()">批量删除</button>
+                            <button class="btn-delete" onclick="deleteAllAccounts()">全部删除</button>
+                        </div>
                     </div>
                 </div>
                 <div class="table-container">

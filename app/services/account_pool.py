@@ -290,11 +290,16 @@ async def create_account(account_data: str, status: str = "1", description: str 
         logger.error(f"Failed to create account: {e}")
         raise
 
-async def get_accounts(skip: int = 0, limit: int = 100) -> List[Account]:
+async def get_accounts(skip: int = 0, limit: int = 100, status: Optional[str] = None) -> List[Account]:
     """获取账号列表"""
     try:
         async with AsyncSessionLocal() as db:
-            stmt = select(Account).offset(skip).limit(limit)
+            stmt = select(Account)
+            if status is not None:
+                stmt = stmt.filter(Account.status == status)
+            stmt = stmt.order_by(Account.id.asc()).offset(skip)
+            if limit is not None:
+                stmt = stmt.limit(limit)
             result = await db.execute(stmt)
             return result.scalars().all()
     except Exception as e:
