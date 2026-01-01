@@ -373,7 +373,17 @@ class KiroNonStreamService(KiroBaseService):
             if proxy:
                 logger.info(f'[Kiro] 非流式使用代理请求: {proxy}')
 
-            async with self.session.post(request_url, json=request_data, headers=headers, proxy=proxy) as response:                # 打印响应状态
+            async with self.session.post(
+                request_url,
+                json=request_data,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(
+                    total=300,
+                    connect=30,
+                    sock_read=60
+                ),
+                proxy=proxy
+            ) as response:                # 打印响应状态
                 
                 logger.info(f'[Kiro] Response status: {response.status}')
 

@@ -325,14 +325,7 @@ class KiroBaseService:
             
            
 
-    async def _get_current_account(self) -> Optional[Dict]:
-        """获取当前使用的账号"""
-        if not self.accounts_cache or self.current_account_index >= len(self.accounts_cache):
-            return None
-        return self.accounts_cache[self.current_account_index]
 
-    async def _refresh_accounts_cache(self) -> bool:
-        """刷新账号缓存，从Redis账号池重新加载"""
         try:
             async with self.account_lock:
                 # 从Redis账号池获取新的账号
@@ -391,13 +384,18 @@ class KiroBaseService:
 
         # 创建 HTTP 会话
         connector = aiohttp.TCPConnector(
-            limit=200,
-            limit_per_host=100,
+            limit=500,
+            limit_per_host=200,
             force_close=False,
-             enable_cleanup_closed=True
+            enable_cleanup_closed=True,
+            ttl_dns_cache=300
         )
 
-        timeout = aiohttp.ClientTimeout(total=300)  # 5分钟超时
+        timeout = aiohttp.ClientTimeout(
+            total=300,  # 5分钟总超时
+            connect=30,  # 30秒连接超时
+            sock_read=60  # 60秒读取超时
+        )
 
         headers = self._build_headers()
 

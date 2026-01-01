@@ -361,7 +361,11 @@ class KiroStreamService(KiroBaseService):
                 request_url,
                 json=request_data,
                 headers=headers,
-                timeout=aiohttp.ClientTimeout(total=300),
+                timeout=aiohttp.ClientTimeout(
+                    total=300,
+                    connect=30,
+                    sock_read=60
+                ),
                 proxy=proxy
             ) as response:
                 # 打印响应状态

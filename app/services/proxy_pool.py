@@ -30,8 +30,8 @@ def init_redis():
                 password=getattr(settings, "REDIS_PASSWORD", None),
                 max_connections=50,
                 decode_responses=True,
-                socket_timeout=5,
-                socket_connect_timeout=5,
+                socket_timeout=10,
+                socket_connect_timeout=10,
                 retry_on_timeout=True
             )
             redis_client = redis.Redis(connection_pool=redis_pool)
