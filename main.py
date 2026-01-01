@@ -11,6 +11,7 @@ from app.services.kiro_service import get_kiro_service
 from app.db.database import init_db
 from app.db.init_data import init_default_user
 from app.api.management import router as management_router
+from app.api.pool import router as pool_router
 from app.services.heartbeat import heartbeat_service
 from app.services.account_pool import initialize_pool, close_redis
 from app.services.proxy_pool import initialize_pool as initialize_proxy_pool, close_redis as close_proxy_redis
@@ -95,7 +96,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # 注册路由
 app.include_router(messages_router)
 app.include_router(management_router, prefix="/api/management", tags=["管理"])
-
+app.include_router(pool_router, prefix="/api/pool", tags=["账号池"])
 @app.get('/')
 async def root():
     """根路径自动跳转到登录页面"""
