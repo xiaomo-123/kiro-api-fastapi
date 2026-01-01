@@ -22,15 +22,15 @@ class RequestQueueManager:
 
     def __init__(
         self,
-        batch_size: int = 50,
-        batch_timeout: float = 0.02
+        batch_size: int = 5,
+        batch_timeout: float = 0.005
     ):
         """
         初始化请求队列管理器
 
         Args:
-            batch_size: 批处理大小
-            batch_timeout: 批处理超时时间（秒）
+            batch_size: 批处理大小（减少以提高响应速度）
+            batch_timeout: 批处理超时时间（秒）（减少以提高响应速度）
         """
         self.batch_size = batch_size
         self.batch_timeout = batch_timeout
