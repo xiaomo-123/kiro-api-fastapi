@@ -379,17 +379,17 @@ class KiroBaseService:
 
         # 创建 HTTP 会话
         connector = aiohttp.TCPConnector(
-            limit=500,
-            limit_per_host=200,
-            force_close=False,
-            enable_cleanup_closed=True,
-            ttl_dns_cache=300
+            limit=500,                    # 总连接数限制
+            limit_per_host=100,          # 每个主机的连接数限制(降低以避免单主机过载)
+            force_close=False,           # 启用连接复用
+            enable_cleanup_closed=True,   # 启用连接清理
+            ttl_dns_cache=300            # DNS缓存5分钟
         )
 
         timeout = aiohttp.ClientTimeout(
-            total=300,  # 5分钟总超时
-            connect=30,  # 30秒连接超时
-            sock_read=60  # 60秒读取超时
+            total=300,      # 5分钟总超时
+            connect=30,      # 30秒连接超时
+            sock_read=60     # 60秒读取超时
         )
 
         headers = self._build_headers()
@@ -402,6 +402,11 @@ class KiroBaseService:
 
         self.is_initialized = True
         logger.info('[Kiro] Kiro API Service initialized successfully')
+
+        # 记录连接池配置信息
+        logger.info(f'[Kiro] Connection pool configured: '
+                   f'limit={connector.limit}, '
+                   f'limit_per_host={connector.limit_per_host}')
 
     def _build_headers(self) -> Dict[str, str]:
         """构建请求头"""

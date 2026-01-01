@@ -117,6 +117,35 @@ async def health_check():
             'accounts_count': len(kiro_service.accounts_cache) if kiro_service.accounts_cache else 0
         }
     }
+@app.get('/connection-pool-status')
+async def connection_pool_status():
+    """连接池状态监控接口"""
+    kiro_service = get_kiro_service()
+
+    if not kiro_service.is_initialized or not kiro_service.session:
+        return {
+            'status': 'not_initialized',
+            'message': 'Kiro service not initialized'
+        }
+
+    connector = kiro_service.session.connector
+    return {
+        'status': 'active',
+        'connection_pool': {
+            'total_limit': connector.limit,
+            'limit_per_host': connector.limit_per_host,
+            'total_connections': len(connector._conns),
+            'active_connections': sum(len(conns) for conns in connector._conns.values()),
+            'connections_by_host': {
+                host: len(conns) 
+                for host, conns in connector._conns.items()
+            }
+        },
+        'proxy': {
+            'enabled': kiro_service.proxy is not None,
+            'proxy_url': kiro_service.proxy if kiro_service.proxy else None
+        }
+    }
 
 
 if __name__ == '__main__':

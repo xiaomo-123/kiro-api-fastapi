@@ -357,15 +357,18 @@ class KiroStreamService(KiroBaseService):
             if proxy:
                 logger.info(f'[Kiro Stream] 流式使用代理请求: {proxy}')
 
+            # 使用更长的超时时间来处理高并发情况
+            request_timeout = aiohttp.ClientTimeout(
+                total=300,       # 5分钟总超时
+                connect=30,       # 30秒连接超时
+                sock_read=120     # 120秒读取超时(增加以应对高并发)
+            )
+
             async with self.session.post(
                 request_url,
                 json=request_data,
                 headers=headers,
-                timeout=aiohttp.ClientTimeout(
-                    total=300,
-                    connect=30,
-                    sock_read=60
-                ),
+                timeout=request_timeout,
                 proxy=proxy
             ) as response:
                 # 打印响应状态

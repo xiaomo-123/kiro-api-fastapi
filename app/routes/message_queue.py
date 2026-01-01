@@ -205,7 +205,7 @@ def get_queue_manager() -> RequestQueueManager:
     global _queue_manager
     if _queue_manager is None:
         _queue_manager = RequestQueueManager(
-            batch_size=10,      # 批处理大小
-            batch_timeout=0.05  # 批处理超时
+            batch_size=5,       # 批处理大小(降低以减少并发压力)
+            batch_timeout=0.1   # 批处理超时(增加以允许更多请求积累)
         )
     return _queue_manager
