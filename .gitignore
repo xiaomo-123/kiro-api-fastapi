@@ -4,6 +4,7 @@ node_modules
 kiro_management.db
 *.md
 yarn.lock
+kiro-auth-token-367024c9 .json
 package-lock.json
 proxy copy.yaml
 # Build outputs
