@@ -3,6 +3,7 @@ import json
 import time
 import logging
 import asyncio
+import socket
 from typing import Optional, Dict, List
 import redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,7 @@ def init_redis():
     global redis_pool, redis_client
     if redis_client is None:
         try:
+            logger.info(f"Attempting to connect to Redis at {getattr(settings, 'REDIS_HOST', 'localhost')}:{getattr(settings, 'REDIS_PORT', 6379)}")
             redis_pool = redis.ConnectionPool(
                 host=getattr(settings, "REDIS_HOST", "localhost"),
                 port=getattr(settings, "REDIS_PORT", 6379),
@@ -31,12 +33,19 @@ def init_redis():
                 password=getattr(settings, "REDIS_PASSWORD", None),
                 max_connections=50,
                 decode_responses=True,
-                socket_timeout=10,
-                socket_connect_timeout=10,
-                retry_on_timeout=True,
+                socket_timeout=5,              # 减少超时时间
+                socket_connect_timeout=5,       # 减少连接超时时间
+                socket_keepalive=True,          # 启用保活
+                socket_keepalive_options={
+                    socket.TCP_KEEPIDLE: 1,
+                    socket.TCP_KEEPINTVL: 3,
+                    socket.TCP_KEEPCNT: 5
+                },
+                retry_on_timeout=False,         # 禁用超时重试，避免长时间阻塞
                 health_check_interval=30
             )
             redis_client = redis.Redis(connection_pool=redis_pool)
+            # 测试连接，设置较短的超时
             redis_client.ping()
             logger.info("Redis connected successfully")
         except Exception as e:

@@ -24,5 +24,5 @@ COPY main.py .
 # 暴露端口
 EXPOSE 5431
 
-# 启动命令
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5431", "--log-level", "info", "--access-log"]
+# 启动命令 - 使用main.py中的配置
+CMD ["python", "main.py"]

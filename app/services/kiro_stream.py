@@ -374,7 +374,7 @@ class KiroStreamService(KiroBaseService):
                 # 打印响应状态
                 logger.info(f'[Kiro Stream] Response status: {response.status}')
                 if response.status == 503:
-                    logger.warning('[Kiro] Received 403 after token refresh. Disabling current account and switching...')
+                    logger.warning('[Kiro] Received 503 after token refresh. Disabling current account and switching...')
                     # 禁用当前账号
                     await self._disable_current_account()
                     # 切换到下一个账号

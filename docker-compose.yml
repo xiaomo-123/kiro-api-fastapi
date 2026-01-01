@@ -58,6 +58,13 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=1234
       - POSTGRES_DB=postgres
+      # Uvicorn配置
+      - UVICORN_WORKERS=4
+      - UVICORN_HOST=0.0.0.0
+      - UVICORN_PORT=5431
+      - UVICORN_LIMIT_CONCURRENCY=200
+      - UVICORN_TIMEOUT_KEEP_ALIVE=30
+      - UVICORN_BACKLOG=2048
     depends_on:
       redis:
         condition: service_healthy

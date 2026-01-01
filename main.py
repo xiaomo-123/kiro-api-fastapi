@@ -1,5 +1,9 @@
+
 # 应用入口
 import logging
+import signal
+import sys
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +19,7 @@ from app.api.pool import router as pool_router
 from app.services.heartbeat import heartbeat_service
 from app.services.account_pool import initialize_pool, close_redis
 from app.services.proxy_pool import initialize_pool as initialize_proxy_pool, close_redis as close_proxy_redis
+
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -37,7 +42,7 @@ async def lifespan(app: FastAPI):
     # 初始化默认管理员用户
     await init_default_user()
     logger.info('Default admin user initialized')
-    
+
     # 初始化账号池
     await initialize_pool()
     logger.info('Account pool initialized')
@@ -45,6 +50,7 @@ async def lifespan(app: FastAPI):
     # 初始化代理池
     await initialize_proxy_pool()
     logger.info('Proxy pool initialized')
+
     # 初始化并启动心跳服务
     heartbeat_service.init_app(app)
     heartbeat_service.start()
@@ -66,11 +72,15 @@ async def lifespan(app: FastAPI):
     # 关闭数据库引擎
     from app.db.database import engine
     await engine.dispose()
+    # 关闭 Redis 连接
+    close_redis()
+    close_proxy_redis()
     # 尝试关闭Kiro服务（如果已初始化）
     kiro_service = get_kiro_service()
     if kiro_service.is_initialized:
         await kiro_service.close()
     logger.info('Application shutdown complete')
+
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -97,6 +107,8 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(messages_router)
 app.include_router(management_router, prefix="/api/management", tags=["管理"])
 app.include_router(pool_router, prefix="/api/pool", tags=["账号池"])
+
+
 @app.get('/')
 async def root():
     """根路径自动跳转到登录页面"""
@@ -118,6 +130,8 @@ async def health_check():
             'accounts_count': len(kiro_service.accounts_cache) if kiro_service.accounts_cache else 0
         }
     }
+
+
 @app.get('/connection-pool-status')
 async def connection_pool_status():
     """连接池状态监控接口"""
@@ -151,25 +165,46 @@ async def connection_pool_status():
 
 if __name__ == '__main__':
     import uvicorn
-    import os
+    import multiprocessing
 
-    # 尝试使用 uvloop 和 httptools 提升性能
-    try:
-        import uvloop
-        uvloop.install()
-        logger.info('uvloop installed and enabled')
-    except ImportError:
-        logger.info('uvloop not available, using default event loop')
+    # 从环境变量获取配置，如果没有则使用默认值
+    workers = int(os.getenv('UVICORN_WORKERS', str(multiprocessing.cpu_count() * 2)))
+    host = os.getenv('UVICORN_HOST', settings.HOST)
+    port = int(os.getenv('UVICORN_PORT', str(settings.SERVER_PORT)))
+    limit_concurrency = int(os.getenv('UVICORN_LIMIT_CONCURRENCY', '200'))
+    timeout_keep_alive = int(os.getenv('UVICORN_TIMEOUT_KEEP_ALIVE', '30'))
+    backlog = int(os.getenv('UVICORN_BACKLOG', '2048'))
 
-    # 配置 uvicorn
-    uvicorn.run(
+    logger.info(f'Starting uvicorn with config: workers={workers}, host={host}, port={port}, '
+                f'limit_concurrency={limit_concurrency}, timeout_keep_alive={timeout_keep_alive}, backlog={backlog}')
+
+    # 创建配置
+    config = uvicorn.Config(
         'main:app',
-        host=settings.HOST,
-        port=settings.SERVER_PORT,
+        host=host,
+        port=port,
+        workers=workers,              # 从环境变量或默认值获取
         log_level='info',
-        loop='uvloop' if os.name != 'nt' else None,  # Windows 不支持 uvloop
-        access_log=True,
-        use_colors=True,
-        limit_concurrency=1000,
-        timeout_keep_alive=5
+        limit_concurrency=limit_concurrency,       # 从环境变量或默认值获取
+        timeout_keep_alive=timeout_keep_alive,        # 从环境变量或默认值获取
+        backlog=backlog                  # 从环境变量或默认值获取
     )
+
+    # 创建服务器实例
+    server = uvicorn.Server(config)
+
+    # 设置信号处理器
+    def handle_signal(signum, frame):
+        logger.info(f'Received signal {signum}, shutting down...')
+        server.should_exit = True
+
+    # 注册信号处理器
+    signal.signal(signal.SIGINT, handle_signal)
+    signal.signal(signal.SIGTERM, handle_signal)
+
+    # Windows下也支持SIGBREAK
+    if sys.platform == 'win32':
+        signal.signal(signal.SIGBREAK, handle_signal)
+
+    # 运行服务器
+    server.run()

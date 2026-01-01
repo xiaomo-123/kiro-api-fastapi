@@ -2,7 +2,7 @@
 node_modules
 *.bat
 kiro_management.db
-*.md
+md/
 yarn.lock
 kiro-auth-token-367024c9 .json
 package-lock.json

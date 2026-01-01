@@ -22,8 +22,8 @@ class RequestQueueManager:
 
     def __init__(
         self,
-        batch_size: int = 10,
-        batch_timeout: float = 0.05
+        batch_size: int = 50,
+        batch_timeout: float = 0.02
     ):
         """
         初始化请求队列管理器

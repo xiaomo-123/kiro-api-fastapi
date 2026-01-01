@@ -386,18 +386,12 @@ class KiroBaseService:
             ttl_dns_cache=300            # DNS缓存5分钟
         )
 
-        timeout = aiohttp.ClientTimeout(
-            total=300,      # 5分钟总超时
-            connect=30,      # 30秒连接超时
-            sock_read=60     # 60秒读取超时
-        )
-
         headers = self._build_headers()
 
+        # 创建session时不设置timeout，让每个请求独立控制超时
         self.session = aiohttp.ClientSession(
             connector=connector,
-            headers=headers,
-            timeout=timeout
+            headers=headers
         )
 
         self.is_initialized = True
