@@ -379,7 +379,7 @@ class KiroStreamService(KiroBaseService):
                 if response.status == 403 and is_retry:
                     logger.warning('[Kiro] Received 403 after token refresh. Disabling current account and switching...')
                     # 禁用当前账号
-                    self._disable_current_account()
+                    await self._disable_current_account()
                     # 切换到下一个账号
                     switched_account = await self._switch_to_next_account()
                     if switched_account:
@@ -387,6 +387,12 @@ class KiroStreamService(KiroBaseService):
                         await self._ensure_token(force_refresh=True)
                         async for event in self._stream_api_real(method, model, body, False, retry_count):
                             yield event
+                        return
+                    else:
+                        # 无法切换账号，返回错误信息
+                        error_text = await response.text()
+                        logger.error(f'[Kiro] No available accounts to switch to. API call failed: {error_text}')
+                        yield {"error": f"Account suspended and no available accounts to switch: {error_text}"}
                         return
 
                 if response.status == 429 and retry_count < max_retries:
@@ -398,6 +404,11 @@ class KiroStreamService(KiroBaseService):
                     return
 
                 if 500 <= response.status < 600 and retry_count < max_retries:
+                    # 如果使用代理且返回500错误，禁用当前代理
+                    if self.proxy:
+                        logger.warning(f'[Kiro] Received {response.status} with proxy, disabling proxy...')
+                        await self._disable_proxy()
+
                     delay = base_delay * (2 ** retry_count)
                     logger.info(f'[Kiro] Received {response.status}. Retrying in {delay}s... (attempt {retry_count + 1}/{max_retries})')
                     await asyncio.sleep(delay)

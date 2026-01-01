@@ -212,6 +212,24 @@ class KiroBaseService:
             logger.error(f'[Kiro] Failed to check proxy count: {e}')
             return False
 
+    async def _disable_proxy(self) -> bool:
+        """禁用当前代理（从Redis代理池中标记为禁用）"""
+        try:
+            if self.current_proxy_id:
+                # 使用 update_proxy 将代理状态设置为 0（禁用）
+                from .proxy_pool import update_proxy
+                await update_proxy(self.current_proxy_id, status="0")
+                logger.info(f'[Kiro] Disabled proxy {self.current_proxy_id} in Redis pool')
+
+            # 将代理设置为 None
+            self.proxy = None
+            self.current_proxy_id = None
+            logger.info('[Kiro] Proxy disabled, using direct connection')
+            return True
+        except Exception as e:
+            logger.error(f'[Kiro] Failed to disable proxy: {e}')
+            return False
+
     async def _switch_to_next_proxy(self) -> bool:
         """切换到下一个可用代理（不标记为失败）
         
@@ -283,33 +301,29 @@ class KiroBaseService:
                 logger.warning('[Kiro] No available account from pool for switching')
                 return False
             
-            # 保存当前索引
-            old_index = self.current_account_index
             
-            # 尝试切换到下一个账号
-            for _ in range(len(self.accounts_cache)):
-                self.current_account_index = (self.current_account_index + 1) % len(self.accounts_cache)
-                account = self.accounts_cache[self.current_account_index]
+            
+            # 直接使用从Redis获取的账号数据，不再使用内存缓存
                 
-                logger.info(f'[Kiro] Switching from account {old_index} to {self.current_account_index}: {account.get("description", "N/A")}')
+            logger.info(f'[Kiro] Switching to account {self.current_account_id} from Redis pool')
                 
                 # 加载新账号的凭证
-                self._load_creds_from_dict(account)
-                
-                # 重新生成机器ID
-                creds_dict = {
-                    'uuid': getattr(settings, 'uuid', None),
-                    'profileArn': self.profile_arn,
-                    'clientId': self.client_id
-                }
-                self.machine_id = generate_machine_id(creds_dict)
-                
-                # 重置令牌过期状态
-                self.expires_at = None
-                
-                return True
+            self._load_creds_from_dict(account)
             
-            return False
+            # 重新生成机器ID
+            creds_dict = {
+                'uuid': getattr(settings, 'uuid', None),
+                'profileArn': self.profile_arn,
+                'clientId': self.client_id
+            }
+            self.machine_id = generate_machine_id(creds_dict)
+            
+            # 重置令牌过期状态
+            self.expires_at = None
+            
+            return True
+            
+           
 
     async def _get_current_account(self) -> Optional[Dict]:
         """获取当前使用的账号"""

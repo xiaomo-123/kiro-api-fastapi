@@ -3,6 +3,7 @@ import threading
 import time
 import requests
 import logging
+import asyncio
 from fastapi import FastAPI
 from app.config import settings
 
@@ -68,9 +69,36 @@ class HeartbeatService:
                 # 出现异常时等待一段时间再重试
                 self.stop_event.wait(min(self.interval, 10))
 
+    def _update_pools(self):
+        """更新代理池和账号池"""
+        try:
+            # 在新的事件循环中运行异步函数
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            try:
+                # 导入并初始化代理池和账号池
+                from app.services.proxy_pool import initialize_pool as init_proxy_pool
+                from app.services.account_pool import initialize_pool as init_account_pool
+
+                # 更新代理池
+                loop.run_until_complete(init_proxy_pool())
+                logger.info("代理池更新成功")
+
+                # 更新账号池
+                loop.run_until_complete(init_account_pool())
+                logger.info("账号池更新成功")
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"更新代理池和账号池失败: {str(e)}")
+
     def _send_heartbeat(self):
         """发送心跳请求"""
         try:
+            # 更新代理池和账号池
+            # self._update_pools()
+
             logger.info(f"发送心跳请求到: {self.heartbeat_url}")
             # 增加超时时间到10秒，并分别设置连接和读取超时
             response = requests.get(
