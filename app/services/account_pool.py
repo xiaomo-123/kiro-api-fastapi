@@ -102,7 +102,7 @@ async def get_available_account() -> Optional[Dict]:
         if redis_client.exists(lock_key):
             return None
 
-        redis_client.setex(lock_key, 30, str(time.time()))
+        redis_client.setex(lock_key, 60, str(time.time()))
         account_key = f"account_pool:{account_id[0]}"
         account_data = redis_client.hgetall(account_key)
         redis_client.hset(account_key, "status", "2")

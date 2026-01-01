@@ -335,26 +335,7 @@ class KiroBaseService:
             # 重置令牌过期状态
             self.expires_at = None
             
-            return True
-            
-           
-
-
-        try:
-            async with self.account_lock:
-                # 从Redis账号池获取新的账号
-                account = await self._load_account_from_pool()
-                if not account:
-                    logger.warning('[Kiro] No available account from pool after refresh')
-                    return False
-                
-                # 加载新账号的凭证
-                self._load_creds_from_dict(account)
-                logger.info(f'[Kiro] Account refreshed from pool: {account.get("description", "N/A")}')
-                return True
-        except Exception as e:
-            logger.error(f'[Kiro] Failed to refresh account from pool: {e}')
-            return False
+            return True                       
    
     async def initialize(self):
         """初始化服务"""

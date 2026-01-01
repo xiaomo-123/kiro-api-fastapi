@@ -386,7 +386,21 @@ class KiroNonStreamService(KiroBaseService):
             ) as response:                # 打印响应状态
                 
                 logger.info(f'[Kiro] Response status: {response.status}')
-
+                if response.status == 503:
+                    logger.warning('[Kiro] Received 503 after token refresh. Disabling current account and switching...')
+                    # 禁用当前账号
+                    await self._disable_current_account()
+                    # 切换到下一个账号
+                    switched_account = await self._switch_to_next_account()
+                    if switched_account:
+                        # 切换账号后重新尝试
+                        await self._ensure_token(force_refresh=True)
+                        return await self._call_api(method, model, body, False, retry_count)
+                    else:
+                        # 无法切换账号，返回错误信息
+                        error_text = await response.text()
+                        logger.error(f'[Kiro] No available accounts to switch to. API call failed: {error_text}')
+                        return {"error": f"Account suspended and no available accounts to switch: {error_text}"}
                 if response.status == 403 and not is_retry:
                     logger.info('[Kiro] Received 403. Attempting token refresh and retrying...')
                     # 刷新令牌后重新尝试
@@ -476,7 +490,7 @@ class KiroNonStreamService(KiroBaseService):
             error_msg = str(e)
             logger.error(f'[Kiro] API call failed: {e}')
 
-            # 如果是代理超时错误，切换到下一个代理
+            # 如果是代理超时错误，切换代理到下一个代理
             if 'Read timed out' in error_msg or 'timeout' in error_msg.lower():
                 if await self._handle_proxy_timeout():
                     logger.info('[Kiro] Retrying with new proxy...')
