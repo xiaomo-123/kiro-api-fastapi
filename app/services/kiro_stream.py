@@ -3,6 +3,12 @@ import json
 import logging
 import asyncio
 import aiohttp
+from aiohttp.client_exceptions import (
+    ClientHttpProxyError,
+    ClientProxyConnectionError,
+    ClientConnectorError,
+    ClientConnectorSSLError
+)
 import uuid
 import struct
 import re
@@ -372,7 +378,8 @@ class KiroStreamService(KiroBaseService):
                 json=request_data,
                 headers=headers,
                 timeout=request_timeout,
-                proxy=proxy
+                proxy=proxy,
+                ssl=False
             ) as response:
                 # 打印响应状态
                 logger.info(f'[Kiro Stream] Response status: {response.status}')
@@ -521,6 +528,16 @@ class KiroStreamService(KiroBaseService):
             if 'Read timed out' in error_msg or 'timeout' in error_msg.lower():
                 if await self._handle_proxy_timeout():
                     logger.info('[Kiro] Retrying with new proxy...')
+                    async for event in self._stream_api_real(method, model, body, is_retry, retry_count):
+                        yield event
+                    return
+
+            # 如果是代理连接错误，禁用当前代理并重试
+            if isinstance(e, (ClientHttpProxyError, ClientProxyConnectionError, ClientConnectorError, ClientConnectorSSLError)) or 'proxy' in error_msg.lower():
+                logger.warning(f'[Kiro] Proxy connection error: {e}')
+                if await self._handle_proxy_error():
+                    logger.info('[Kiro] Disabled current proxy and retrying...')
+                    # 禁用代理后重试，不使用代理
                     async for event in self._stream_api_real(method, model, body, is_retry, retry_count):
                         yield event
                     return
