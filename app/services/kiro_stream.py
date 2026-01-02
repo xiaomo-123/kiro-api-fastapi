@@ -359,9 +359,9 @@ class KiroStreamService(KiroBaseService):
 
             # 使用更长的超时时间来处理高并发情况
             request_timeout = aiohttp.ClientTimeout(
-                total=30,       # 5分钟总超时
-                connect=10,       # 30秒连接超时
-                sock_read=20     # 120秒读取超时(增加以应对高并发)
+                total=300,      # 5分钟总超时
+                connect=30,      # 30秒连接超时
+                sock_read=120    # 120秒读取超时(增加以应对高并发)
             )
 
             async with self.session.post(

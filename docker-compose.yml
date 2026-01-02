@@ -8,7 +8,7 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes --maxmemory 2000mb --maxmemory-policy allkeys-lru --loglevel verbose
+    command: redis-server --appendonly yes --maxmemory 4000mb --maxmemory-policy allkeys-lru --loglevel verbose --tcp-keepalive 300 --tcp-backlog 511
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -58,13 +58,13 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=1234
       - POSTGRES_DB=postgres
-      # Uvicorn配置
-      - UVICORN_WORKERS=8
+      # Uvicorn配置 - 针对每秒200并发的高负载场景
+      - UVICORN_WORKERS=32
       - UVICORN_HOST=0.0.0.0
       - UVICORN_PORT=5431
-      - UVICORN_LIMIT_CONCURRENCY=500
-      - UVICORN_TIMEOUT_KEEP_ALIVE=60
-      - UVICORN_BACKLOG=4096
+      - UVICORN_LIMIT_CONCURRENCY=2000
+      - UVICORN_TIMEOUT_KEEP_ALIVE=300
+      - UVICORN_BACKLOG=16384
     depends_on:
       redis:
         condition: service_healthy
