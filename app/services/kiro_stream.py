@@ -431,10 +431,11 @@ class KiroStreamService(KiroBaseService):
                     return
 
                 if 500 <= response.status < 600 and retry_count < max_retries:
-                    # 如果使用代理且返回500错误，禁用当前代理
+                    # 如果使用代理且返回500错误，处理代理错误
                     if self.proxy:
-                        logger.warning(f'[Kiro] Received {response.status} with proxy, disabling proxy...')
-                        await self._disable_proxy()
+                        logger.warning(f'[Kiro] Received {response.status} with proxy, handling proxy error...')
+                        await self._handle_proxy_error()
+                       
 
                     delay = base_delay * (2 ** retry_count)
                     logger.info(f'[Kiro] Received {response.status}. Retrying in {delay}s... (attempt {retry_count + 1}/{max_retries})')

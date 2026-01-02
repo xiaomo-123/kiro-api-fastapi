@@ -106,6 +106,10 @@ class ProxyUpdate(BaseModel):
 
 class ProxyResponse(ProxyBase):
     id: int
-
+    
     class Config:
         from_attributes = True
+        json_encoders = {
+            # 确保status字段正确序列化
+            str: lambda v: v
+        }

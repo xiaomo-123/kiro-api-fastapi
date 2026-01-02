@@ -1,9 +1,10 @@
+
 // 代理管理模块
 export async function loadProxies() {
     try {
         const response = await fetch('/api/management/proxies');
         const proxies = await response.json();
-        
+
         // 调试日志
         console.log('加载代理列表:', proxies);
 
@@ -39,16 +40,33 @@ export function initProxyForm() {
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
 
+        // 获取表单值
         const id = document.getElementById('proxies-id').value;
         const proxy_type = document.getElementById('proxies-proxy_type').value;
         const proxy_url = document.getElementById('proxies-proxy_url').value;
         const proxy_port = document.getElementById('proxies-proxy_port').value;
         const username = document.getElementById('proxies-username').value;
         const password = document.getElementById('proxies-password').value;
-        const status = document.getElementById('proxies-status').value;
-        
+
+        // 获取status值，确保不是undefined或空字符串
+        const statusElement = document.getElementById('proxies-status');
+        let status = statusElement ? statusElement.value : '1';
+        if (!status) {
+            status = '1';
+        }
+
         // 调试日志
-        
+        console.log('提交表单数据:', { 
+            id, 
+            proxy_type, 
+            proxy_url, 
+            proxy_port, 
+            username, 
+            password, 
+            status,
+            statusElement,
+            statusValue: statusElement?.value
+        });
 
         // 验证必填字段
         if (!proxy_type || proxy_type.trim() === '') {
@@ -65,22 +83,21 @@ export function initProxyForm() {
             // 确保id是数字类型
             const proxyId = id ? parseInt(id) : null;
             console.log('处理代理ID:', { id, proxyId, isUpdate: !!proxyId });
-            
+
             if (proxyId) {
                 // 更新代理
-                console.log('更新代理:', { id, proxy_type, proxy_url, proxy_port, username, password, status });
                 response = await fetch(`/api/management/proxies/${proxyId}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ 
-                        proxy_type, 
-                        proxy_url, 
+                    body: JSON.stringify({
+                        proxy_type,
+                        proxy_url,
                         proxy_port: proxy_port ? parseInt(proxy_port) : null,
-                        username, 
+                        username,
                         password,
-                        status 
+                        status
                     })
                 });
             } else {
@@ -90,13 +107,13 @@ export function initProxyForm() {
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ 
-                        proxy_type, 
-                        proxy_url, 
+                    body: JSON.stringify({
+                        proxy_type,
+                        proxy_url,
                         proxy_port: proxy_port ? parseInt(proxy_port) : null,
-                        username, 
+                        username,
                         password,
-                        status 
+                        status
                     })
                 });
             }
@@ -120,9 +137,9 @@ export async function editProxy(id) {
     try {
         const response = await fetch(`/api/management/proxies/${id}`);
         const proxy = await response.json();
-        
+
         // 调试日志
-      
+        console.log('加载代理数据:', proxy);
 
         document.getElementById('proxies-id').value = proxy.id;
         document.getElementById('proxies-proxy_type').value = proxy.proxy_type;
@@ -131,7 +148,7 @@ export async function editProxy(id) {
         document.getElementById('proxies-username').value = proxy.username || '';
         document.getElementById('proxies-password').value = proxy.password || '';
         document.getElementById('proxies-status').value = proxy.status || '1';
-        
+
         // 调试日志
         console.log('设置表单值:', {
             id: proxy.id,

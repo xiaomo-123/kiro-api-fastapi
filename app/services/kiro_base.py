@@ -6,7 +6,7 @@ import aiohttp
 import uuid
 from typing import Optional, Dict, List, Any
 from datetime import datetime, timedelta, timezone
-
+from .proxy_pool import update_proxy
 from ..config import settings
 from ..utils import (
     load_json_file,
@@ -217,7 +217,7 @@ class KiroBaseService:
         try:
             if self.current_proxy_id:
                 # 使用 update_proxy 将代理状态设置为 0（禁用）
-                from .proxy_pool import update_proxy
+                
                 await update_proxy(self.current_proxy_id, status="0")
                 logger.info(f'[Kiro] Disabled proxy {self.current_proxy_id} in Redis pool')
 
@@ -230,6 +230,60 @@ class KiroBaseService:
             logger.error(f'[Kiro] Failed to disable proxy: {e}')
             return False
 
+    async def _enable_proxy(self, proxy_id: int) -> bool:
+        """启用指定代理（从Redis代理池中标记为启用）
+
+        Args:
+            proxy_id: 要启用的代理ID
+
+        Returns:
+            bool: 是否成功启用代理
+        """
+        try:            
+            await update_proxy(proxy_id, status="1")  
+            logger.info(f'[Kiro] Enabled proxy {proxy_id} ')
+            return True
+        except Exception as e:
+            logger.error(f'[Kiro] Failed to enable proxy {proxy_id}: {e}')
+            return False
+
+    async def _handle_proxy_error(self) -> bool:
+        """处理代理错误，增加错误计数，更新评分，并尝试切换到下一个代理"""
+        try:
+            if not self.current_proxy_id:
+                return False
+
+            from .proxy_pool import redis_client
+            if redis_client is None:
+                return False
+
+            import time
+            proxy_key = f"proxy_pool:{self.current_proxy_id}"
+
+            # 获取当前代理的评分和错误计数
+            current_score = int(redis_client.hget(proxy_key, "score") or "100")
+            error_count = int(redis_client.hget(proxy_key, "error_count") or "0")
+
+            # 增加错误计数
+            error_count += 1
+            redis_client.hset(proxy_key, "error_count", str(error_count))
+
+            # 初始化记录最后错误时间
+            redis_client.hset(proxy_key, "last_error_time", str(int(time.time())))
+
+            # 计算新的评分：score = score - error_count
+            new_score = max(0, current_score - error_count)
+            redis_client.hset(proxy_key, "score", str(new_score))
+
+            # 禁用当前代理
+            await self._disable_proxy()
+
+            logger.info(f'[Kiro] Proxy {self.current_proxy_id} error handled: score={new_score}, error_count={error_count}')
+            return True
+        except Exception as e:
+            logger.error(f'[Kiro] Failed to handle proxy error: {e}')
+            return False
+
     async def _switch_to_next_proxy(self) -> bool:
         """切换到下一个可用代理（不标记为失败）
         
@@ -237,16 +291,44 @@ class KiroBaseService:
             force: 是否强制切换，不检查失败次数
         """""
         try:
+            from .proxy_pool import redis_client
+            import time
+
             # 检查是否有多个可用代理
             has_multiple = await self._has_multiple_proxies()
             if not has_multiple:
                 logger.info('[Kiro] Only one proxy available, not switching')
                 return False
 
-            # 释放当前代理（不标记为失败，仅释放锁）
-            if self.current_proxy_id:
-                await release_proxy(self.current_proxy_id, success=True)
-                logger.info(f'[Kiro] Released proxy {self.current_proxy_id} (normal release)')
+            # 检查并尝试恢复被禁用的代理
+            if redis_client:
+                # 获取所有代理键
+                proxy_keys = redis_client.keys("proxy_pool:*")
+                current_time = int(time.time())
+
+                for key in proxy_keys:
+                    # 获取代理ID
+                    proxy_id_str = key.split(":")[-1]
+                    try:
+                        proxy_id = int(proxy_id_str)
+                    except ValueError:
+                        continue
+
+                    # 获取代理数据
+                    proxy_data = redis_client.hgetall(key)
+                    if not proxy_data:
+                        continue                    
+                    # 获取评分和最后错误时间
+                    score = int(proxy_data.get("score", "100"))
+                    last_error_time = int(proxy_data.get("last_error_time", "0"))
+
+                    # 检查是否满足恢复条件
+                    if score > 90 and (current_time - last_error_time) > 60:
+                        # 恢复代理
+                        await self._enable_proxy(proxy_id)
+                        # 重置最后错误时间
+                        redis_client.hset(key, "last_error_time", "0")
+                        logger.info(f'[Kiro] Recovered proxy {proxy_id} with score={score}')
 
             # 从 Redis 代理池获取新的代理
             proxy_url = await self._load_proxy_from_pool()

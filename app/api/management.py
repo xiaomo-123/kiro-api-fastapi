@@ -293,6 +293,8 @@ async def get_proxy_endpoint(proxy_id: int):
 async def update_proxy_endpoint(proxy_id: int, proxy_update: ProxyUpdate):
     """更新代理"""
     try:
+        
+        
         proxy = await update_proxy(
             proxy_id=proxy_id,
             proxy_type=proxy_update.proxy_type,

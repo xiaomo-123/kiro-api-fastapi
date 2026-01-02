@@ -205,6 +205,14 @@
             display: block;
         }
 
+        /* 代理表格操作列样式 */
+        #proxies-table th:last-child,
+        #proxies-table td:last-child {
+            width: 150px;
+            text-align: center;
+            white-space: nowrap;
+        }
+
         .btn-edit {
             padding: 5px 10px;
             background: #28a745;
@@ -670,7 +678,7 @@
                 </div>
                 <div class="form-group">
                     <label for="proxies-status">状态</label>
-                    <select id="proxies-status">
+                    <select id="proxies-status" name="status">
                         <option value="1">启用</option>
                         <option value="0">禁用</option>
                     </select>

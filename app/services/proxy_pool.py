@@ -82,7 +82,8 @@ async def initialize_pool():
                 pipe.hset(proxy_key, "last_used", "0")
                 pipe.hset(proxy_key, "usage_count", "0")
                 pipe.hset(proxy_key, "error_count", "0")
-                pipe.hset(proxy_key, "health_score", "100")
+                pipe.hset(proxy_key, "score", "100")
+                pipe.hset(proxy_key, "last_error_time", "0")
                 pipe.zadd("available_proxies", {str(proxy.id): 100})
 
             pipe.execute()
@@ -132,23 +133,21 @@ async def release_proxy(proxy_id: int, success: bool = True, response_time: floa
         pipe.hset(proxy_key, "last_used", str(time.time()))
 
         if success:
-            pipe.hincrby(proxy_key, "health_score", 5)
-            pipe.hset(proxy_key, "error_count", "0")
-        else:
-            pipe.hincrby(proxy_key, "error_count", 1)
-            pipe.hincrby(proxy_key, "health_score", -10)
+            pipe.hset(proxy_key, "error_count", "0")  # 成功时重置错误计数
+        # 注意：score的计算在_switch_to_next_proxy中处理
 
         pipe.execute()
 
-        health_score = int(redis_client.hget(proxy_key, "health_score") or "0")
-        health_score = max(0, min(100, health_score))
-        redis_client.hset(proxy_key, "health_score", str(health_score))
+        # 获取当前score
+        score = int(redis_client.hget(proxy_key, "score") or "100")
+        score = max(0, min(100, score))
+        redis_client.hset(proxy_key, "score", str(score))
 
-        if health_score > 30:
-            redis_client.zadd("available_proxies", {str(proxy_id): health_score})
+        if score > 30:
+            redis_client.zadd("available_proxies", {str(proxy_id): score})
 
         redis_client.hset(proxy_key, "status", "1")
-        logger.debug(f"Released proxy {proxy_id}, success={success}, health_score={health_score}")
+        logger.debug(f"Released proxy {proxy_id}, success={success}, score={score}")
     except Exception as e:
         logger.error(f"Failed to release proxy {proxy_id}: {e}")
 
@@ -189,7 +188,8 @@ async def create_proxy(proxy_type: str, proxy_url: str, proxy_port: Optional[int
                 redis_client.hset(proxy_key, "last_used", "0")
                 redis_client.hset(proxy_key, "usage_count", "0")
                 redis_client.hset(proxy_key, "error_count", "0")
-                redis_client.hset(proxy_key, "health_score", "100")
+                redis_client.hset(proxy_key, "score", "100")
+                redis_client.hset(proxy_key, "last_error_time", "0")
                 redis_client.zadd("available_proxies", {str(db_proxy.id): 100})
 
             logger.info(f"Created proxy {db_proxy.id}")
@@ -231,7 +231,7 @@ async def update_proxy(proxy_id: int, proxy_type: Optional[str] = None,
             stmt = select(Proxy).filter(Proxy.id == proxy_id)
             result = await db.execute(stmt)
             proxy = result.scalars().first()
-
+            
             if not proxy:
                 return None
 
@@ -250,32 +250,48 @@ async def update_proxy(proxy_id: int, proxy_type: Optional[str] = None,
 
             await db.commit()
             await db.refresh(proxy)
-
+            
             if redis_client is not None:
                 proxy_key = f"proxy_pool:{proxy_id}"
+                
+                # 检查代理是否存在于Redis中
+                if not redis_client.exists(proxy_key):
+                    # 如果Redis中不存在该代理，创建一个新的
+                    redis_client.hset(proxy_key, "id", str(proxy_id))
+                    redis_client.hset(proxy_key, "proxy_type", proxy.proxy_type)
+                    redis_client.hset(proxy_key, "proxy_url", proxy.proxy_url)
+                    redis_client.hset(proxy_key, "proxy_port", str(proxy.proxy_port) if proxy.proxy_port else "")
+                    redis_client.hset(proxy_key, "username", proxy.username or "")
+                    redis_client.hset(proxy_key, "password", proxy.password or "")
+                    redis_client.hset(proxy_key, "status", proxy.status)
+                    redis_client.hset(proxy_key, "last_used", "0")
+                    redis_client.hset(proxy_key, "usage_count", "0")
+                    redis_client.hset(proxy_key, "error_count", "0")
+                    redis_client.hset(proxy_key, "score", "100")
+                    redis_client.hset(proxy_key, "last_error_time", "0")
+                    
+                else:
+                    
+                    # 更新现有代理的Redis数据
+                    if proxy_type is not None:
+                        redis_client.hset(proxy_key, "proxy_type", proxy_type)
 
-                if proxy_type is not None:
-                    redis_client.hset(proxy_key, "proxy_type", proxy_type)
+                    if proxy_url is not None:
+                        redis_client.hset(proxy_key, "proxy_url", proxy_url)
 
-                if proxy_url is not None:
-                    redis_client.hset(proxy_key, "proxy_url", proxy_url)
+                    if proxy_port is not None:
+                        redis_client.hset(proxy_key, "proxy_port", str(proxy_port))
 
-                if proxy_port is not None:
-                    redis_client.hset(proxy_key, "proxy_port", str(proxy_port))
+                    if username is not None:
+                        redis_client.hset(proxy_key, "username", username)
 
-                if username is not None:
-                    redis_client.hset(proxy_key, "username", username)
+                    if password is not None:
+                        redis_client.hset(proxy_key, "password", password)
 
-                if password is not None:
-                    redis_client.hset(proxy_key, "password", password)
-
-                if status is not None:
-                    redis_client.hset(proxy_key, "status", status)
-
-                    if status == "1":
-                        redis_client.zadd("available_proxies", {str(proxy_id): 100})
-                    else:
-                        redis_client.zrem("available_proxies", str(proxy_id))
+                    if status is not None:
+                        print(proxy_key, "status", status)
+                        redis_client.hset(proxy_key, "status", status)
+                        
 
             logger.info(f"Updated proxy {proxy_id}")
             return proxy
