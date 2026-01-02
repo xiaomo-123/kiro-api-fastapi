@@ -3,6 +3,7 @@ import json
 import logging
 import asyncio
 import aiohttp
+from aiohttp.client_exceptions import ClientHttpProxyError
 import re
 import uuid
 import gzip
@@ -515,7 +516,7 @@ class KiroNonStreamService(KiroBaseService):
                     return await self._call_api(method, model, body, is_retry, retry_count)
 
             # 如果是代理连接错误，禁用当前代理并重试
-            if isinstance(e, aiohttp.ClientHttpProxyError) or 'proxy' in error_msg.lower():
+            if isinstance(e, ClientHttpProxyError) or 'proxy' in error_msg.lower():
                 logger.warning(f'[Kiro] Proxy connection error: {e}')
                 if await self._handle_proxy_error():
                     logger.info('[Kiro] Disabled current proxy and retrying...')

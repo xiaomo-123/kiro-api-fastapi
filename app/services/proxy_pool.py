@@ -289,7 +289,7 @@ async def update_proxy(proxy_id: int, proxy_type: Optional[str] = None,
                         redis_client.hset(proxy_key, "password", password)
 
                     if status is not None:
-                        print(proxy_key, "status", status)
+                        logger.info(f"Updating proxy {proxy_key} status to {status}")
                         redis_client.hset(proxy_key, "status", status)
                         
 
