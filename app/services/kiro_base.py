@@ -177,14 +177,13 @@ class KiroBaseService:
             self.current_proxy_id = int(proxy_id)
 
             # 构建完整的代理URL
-            proxy_type = proxy_data.get('proxy_type', 'http')
             proxy_url = proxy_data.get('proxy_url', '')
             proxy_port = proxy_data.get('proxy_port', '')
             username = proxy_data.get('username', '')
             password = proxy_data.get('password', '')
 
-            # 构建代理URL
-            proxy_url_str = f"{proxy_type}://"
+            # 构建代理URL，强制使用HTTP协议以避免TLS in TLS问题
+            proxy_url_str = "http://"
             if username and password:
                 proxy_url_str += f"{username}:{password}@"
             # 确保端口号正确地添加到主机名后面
