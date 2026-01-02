@@ -436,7 +436,12 @@ class KiroNonStreamService(KiroBaseService):
                     logger.info(f'[Kiro] Received 429. Retrying in {delay}s... (attempt {retry_count + 1}/{max_retries})')
                     await asyncio.sleep(delay)
                     return await self._call_api(method, model, body, is_retry, retry_count + 1)
-
+                if isinstance(e, aiohttp.ClientHttpProxyError) or 'proxy' in error_msg.lower():
+                    logger.warning(f'[Kiro] Proxy connection error: {e}')
+                    if await self._handle_proxy_error():
+                        logger.info('[Kiro] Disabled current proxy and retrying...')
+                    # 禁用代理后重试，不使用代理
+                    return await self._call_api(method, model, body, is_retry, retry_count)
                 if 500 <= response.status < 600 and retry_count < max_retries:
                     # 如果使用代理且返回500错误，禁用当前代理
                     if self.proxy:
@@ -507,6 +512,14 @@ class KiroNonStreamService(KiroBaseService):
             if 'Read timed out' in error_msg or 'timeout' in error_msg.lower():
                 if await self._handle_proxy_timeout():
                     logger.info('[Kiro] Retrying with new proxy...')
+                    return await self._call_api(method, model, body, is_retry, retry_count)
+
+            # 如果是代理连接错误，禁用当前代理并重试
+            if isinstance(e, aiohttp.ClientHttpProxyError) or 'proxy' in error_msg.lower():
+                logger.warning(f'[Kiro] Proxy connection error: {e}')
+                if await self._handle_proxy_error():
+                    logger.info('[Kiro] Disabled current proxy and retrying...')
+                    # 禁用代理后重试，不使用代理
                     return await self._call_api(method, model, body, is_retry, retry_count)
 
             raise
