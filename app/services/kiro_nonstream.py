@@ -358,6 +358,7 @@ class KiroNonStreamService(KiroBaseService):
         request_url = self._get_request_url(model)
         logger.info('[Kiro] Mode: 非流式 Non-streaming')
         logger.info(f'[Kiro] Request URL: {request_url}')
+        logger.info(f'[Kiro] Request start time: {request_start_time}')
         request_data = self._build_codewhisperer_request(
             body.get('messages', []),
             model,
