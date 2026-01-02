@@ -187,9 +187,11 @@ class KiroBaseService:
             proxy_url_str = f"{proxy_type}://"
             if username and password:
                 proxy_url_str += f"{username}:{password}@"
-            proxy_url_str += proxy_url
+            # 确保端口号正确地添加到主机名后面
             if proxy_port:
-                proxy_url_str += f":{proxy_port}"
+                proxy_url_str += f"{proxy_url}:{proxy_port}"
+            else:
+                proxy_url_str += proxy_url
 
             logger.info(f'[Kiro] Successfully loaded proxy {proxy_id} from pool: {proxy_url_str}')
             return proxy_url_str
