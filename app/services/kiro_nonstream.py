@@ -425,6 +425,8 @@ class KiroNonStreamService(KiroBaseService):
                 if response.status == 403 and is_retry:
                     logger.warning('[Kiro] Received 403 after token refresh. Disabling current account and switching...')
                     # 禁用当前账号
+                    await self._handle_proxy_error()
+                    
                     await self._disable_current_account()
                     # 切换到下一个账号
                     switched_account = await self._switch_to_next_account()
@@ -443,6 +445,10 @@ class KiroNonStreamService(KiroBaseService):
                     logger.info(f'[Kiro] Received 429. Retrying in {delay}s... (attempt {retry_count + 1}/{max_retries})')
                     await asyncio.sleep(delay)
                     return await self._call_api(method, model, body, is_retry, retry_count + 1)
+                if response.status == 500 and is_retry:                    
+                    await self._handle_proxy_error()
+                    await self._disable_current_account()
+                    await self._switch_to_next_account()
                 if 500 <= response.status < 600 and retry_count < max_retries:
                     # 如果使用代理且返回500错误，禁用当前代理
                     if self.proxy:
@@ -523,10 +529,9 @@ class KiroNonStreamService(KiroBaseService):
             # 如果是代理连接错误，禁用当前代理并重试
             if isinstance(e, (ClientProxyConnectionError, ClientConnectorError, ClientConnectorSSLError)) or 'proxy' in error_msg.lower():
                 logger.warning(f'[Kiro] Proxy connection error: {e}')
-                if await self._handle_proxy_error():
-                    logger.info('[Kiro] Disabled current proxy and retrying...')
+                
                     # 禁用代理后重试，不使用代理
-                    return await self._call_api(method, model, body, is_retry, retry_count)
+                return await self._call_api(method, model, body, is_retry, retry_count)
 
             raise
 

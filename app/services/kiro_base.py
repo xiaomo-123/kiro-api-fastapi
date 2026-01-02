@@ -287,19 +287,7 @@ class KiroBaseService:
 
             # 计算新的评分：score = score - error_count
             new_score = max(0, current_score - error_count)
-            redis_client.hset(proxy_key, "score", str(new_score))
-
-            # 禁用当前代理
-            await self._disable_proxy()
-
-            logger.info(f'[Kiro] Proxy {self.current_proxy_id} error handled: score={new_score}, error_count={error_count}')
-            
-            # 尝试切换到下一个代理
-            switched = await self._switch_to_next_proxy()
-            if switched:
-                logger.info('[Kiro] Successfully switched to new proxy after error')
-            else:
-                logger.warning('[Kiro] Failed to switch to new proxy after error')
+            redis_client.hset(proxy_key, "score", str(new_score))           
             
             return switched
         except Exception as e:
