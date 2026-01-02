@@ -522,6 +522,11 @@ class KiroStreamService(KiroBaseService):
 
         except aiohttp.ClientError as e:
             error_msg = str(e)
+            
+            # 忽略代理服务器返回的错误（如500错误）和Invalid HTTP request错误，不打印日志
+            if isinstance(e, ClientHttpProxyError) or 'Invalid HTTP request' in error_msg:
+                return
+            
             logger.error(f'[Kiro] API call failed: {e}')
 
             # 如果是代理超时错误，切换到下一个代理
@@ -532,12 +537,8 @@ class KiroStreamService(KiroBaseService):
                         yield event
                     return
 
-            # 忽略 Invalid HTTP request 错误，不打印日志
-            if 'Invalid HTTP request' in error_msg:
-                return
-
             # 如果是代理连接错误，禁用当前代理并重试
-            if isinstance(e, (ClientHttpProxyError, ClientProxyConnectionError, ClientConnectorError, ClientConnectorSSLError)) or 'proxy' in error_msg.lower():
+            if isinstance(e, (ClientProxyConnectionError, ClientConnectorError, ClientConnectorSSLError)) or 'proxy' in error_msg.lower():
                 logger.warning(f'[Kiro] Proxy connection error: {e}')
                 if await self._handle_proxy_error():
                     logger.info('[Kiro] Disabled current proxy and retrying...')
