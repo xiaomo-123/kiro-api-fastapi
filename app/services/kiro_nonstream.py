@@ -346,6 +346,9 @@ class KiroNonStreamService(KiroBaseService):
         retry_count: int = 0
     ) -> Dict:
         """调用 Kiro API（非流式）"""
+        import time
+        request_start_time = time.time()
+
         if not self.is_initialized:
             await self.initialize()
 
@@ -486,6 +489,11 @@ class KiroNonStreamService(KiroBaseService):
                 except Exception as read_error:
                     logger.error(f'[Kiro] Failed to read response: {read_error}')
                     raise Exception(f'Failed to read API response: {read_error}')
+
+                # 记录请求处理时间
+                import time
+                request_duration = time.time() - request_start_time
+                logger.info(f'[Kiro] Request completed in {request_duration:.3f}s (model={model}, retry_count={retry_count})')
 
                 return response_data
 

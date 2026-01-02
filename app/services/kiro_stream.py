@@ -327,6 +327,9 @@ class KiroStreamService(KiroBaseService):
         retry_count: int = 0
     ) -> AsyncGenerator[Dict, None]:
         """真正的流式 API 调用"""
+        import time
+        request_start_time = time.time()
+
         if not self.is_initialized:
             await self.initialize()
 
@@ -503,6 +506,11 @@ class KiroStreamService(KiroBaseService):
                     except json.JSONDecodeError:
                         # 如果解析失败，直接作为内容返回
                         yield {'type': 'content', 'content': response_data}
+
+                # 记录请求处理时间
+                import time
+                request_duration = time.time() - request_start_time
+                logger.info(f'[Kiro Stream] Request completed in {request_duration:.3f}s (model={model}, retry_count={retry_count})')
 
         except aiohttp.ClientError as e:
             error_msg = str(e)
