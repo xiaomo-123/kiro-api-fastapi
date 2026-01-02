@@ -379,8 +379,8 @@ class KiroBaseService:
 
         # 创建 HTTP 会话
         connector = aiohttp.TCPConnector(
-            limit=500,                    # 总连接数限制
-            limit_per_host=100,          # 每个主机的连接数限制(降低以避免单主机过载)
+            limit=1000,                    # 总连接数限制
+            limit_per_host=200,          # 每个主机的连接数限制(降低以避免单主机过载)
             force_close=False,           # 启用连接复用
             enable_cleanup_closed=True,   # 启用连接清理
             ttl_dns_cache=300            # DNS缓存5分钟
