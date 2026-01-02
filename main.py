@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
     # 停止心跳服务
     heartbeat_service.stop()
     # 关闭请求队列管理器
-    from app.routes.message_queue import get_queue_manager
+    from app.routes.message_queue_v2 import get_queue_manager
     queue_manager = get_queue_manager()
     await queue_manager.shutdown()
     # 关闭数据库引擎

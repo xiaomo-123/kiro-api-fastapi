@@ -8,7 +8,7 @@ from ..controllers.message_controller import get_message_controller
 from ..config import settings
 from ..db.database import get_db
 from ..db.models import ApiKey
-from .message_queue import get_queue_manager
+from .message_queue_v2 import get_queue_manager
 
 router = APIRouter()
 
