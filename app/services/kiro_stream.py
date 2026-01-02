@@ -532,6 +532,10 @@ class KiroStreamService(KiroBaseService):
                         yield event
                     return
 
+            # 忽略 Invalid HTTP request 错误，不打印日志
+            if 'Invalid HTTP request' in error_msg:
+                return
+
             # 如果是代理连接错误，禁用当前代理并重试
             if isinstance(e, (ClientHttpProxyError, ClientProxyConnectionError, ClientConnectorError, ClientConnectorSSLError)) or 'proxy' in error_msg.lower():
                 logger.warning(f'[Kiro] Proxy connection error: {e}')

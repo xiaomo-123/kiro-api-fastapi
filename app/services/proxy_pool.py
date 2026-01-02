@@ -108,6 +108,13 @@ async def get_available_proxy() -> Optional[Dict]:
         redis_client.setex(lock_key, 60, str(time.time()))
         proxy_key = f"proxy_pool:{proxy_id[0]}"
         proxy_data = redis_client.hgetall(proxy_key)
+        
+        # 检查代理是否可用
+        if not proxy_data or proxy_data.get("status") != "1":
+            logger.warning(f"Proxy {proxy_id[0]} is not available (status={proxy_data.get('status', 'N/A')})")
+            redis_client.delete(lock_key)
+            return None
+        
         redis_client.hset(proxy_key, "status", "2")
 
         if proxy_data:
@@ -291,6 +298,10 @@ async def update_proxy(proxy_id: int, proxy_type: Optional[str] = None,
                     if status is not None:
                         logger.info(f"Updating proxy {proxy_key} status to {status}")
                         redis_client.hset(proxy_key, "status", status)
+                        # 如果代理被禁用，从available_proxies有序集合中移除
+                        if status == "0":
+                            redis_client.zrem("available_proxies", str(proxy_id))
+                            logger.info(f"Removed proxy {proxy_id} from available_proxies")
                         
 
             logger.info(f"Updated proxy {proxy_id}")

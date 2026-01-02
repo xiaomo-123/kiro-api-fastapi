@@ -515,6 +515,10 @@ class KiroNonStreamService(KiroBaseService):
                     logger.info('[Kiro] Retrying with new proxy...')
                     return await self._call_api(method, model, body, is_retry, retry_count)
 
+            # 忽略 Invalid HTTP request 错误，不打印日志
+            if 'Invalid HTTP request' in error_msg:
+                return
+
             # 如果是代理连接错误，禁用当前代理并重试
             if isinstance(e, (ClientHttpProxyError, ClientProxyConnectionError, ClientConnectorError, ClientConnectorSSLError)) or 'proxy' in error_msg.lower():
                 logger.warning(f'[Kiro] Proxy connection error: {e}')

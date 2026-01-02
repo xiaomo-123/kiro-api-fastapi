@@ -27,6 +27,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 抑制 aiohttp 的警告日志
+logging.getLogger('aiohttp').setLevel(logging.ERROR)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

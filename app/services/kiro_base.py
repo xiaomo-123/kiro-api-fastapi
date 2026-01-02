@@ -205,8 +205,21 @@ class KiroBaseService:
             if redis_client is None:
                 return False
             
-            # 获取可用代理数量
-            available_count = redis_client.zcard("available_proxies")
+            # 获取所有代理键
+            proxy_keys = redis_client.keys("proxy_pool:*")
+            available_count = 0
+            
+            for key in proxy_keys:
+                # 获取代理数据
+                proxy_data = redis_client.hgetall(key)
+                if not proxy_data:
+                    continue
+                
+                # 检查代理是否可用
+                status = proxy_data.get("status", "0")
+                if status == "1":
+                    available_count += 1
+            
             logger.info(f'[Kiro] Available proxies count: {available_count}')
             return available_count > 1
         except Exception as e:
@@ -280,7 +293,15 @@ class KiroBaseService:
             await self._disable_proxy()
 
             logger.info(f'[Kiro] Proxy {self.current_proxy_id} error handled: score={new_score}, error_count={error_count}')
-            return True
+            
+            # 尝试切换到下一个代理
+            switched = await self._switch_to_next_proxy()
+            if switched:
+                logger.info('[Kiro] Successfully switched to new proxy after error')
+            else:
+                logger.warning('[Kiro] Failed to switch to new proxy after error')
+            
+            return switched
         except Exception as e:
             logger.error(f'[Kiro] Failed to handle proxy error: {e}')
             return False
