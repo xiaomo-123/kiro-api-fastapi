@@ -539,14 +539,14 @@ class KiroBaseService:
 
         await self._ensure_token()
 
-        # 创建 HTTP 会话 - 针对每秒200并发的高负载场景
+        # 创建 HTTP 会话 - 优化连接池配置
         connector = aiohttp.TCPConnector(
-            limit=5000,                   # 总连接数限制(大幅增加)
-            limit_per_host=1000,          # 每个主机的连接数限制(大幅增加)
+            limit=1000,                   # 总连接数限制(优化)
+            limit_per_host=200,          # 每个主机的连接数限制(优化)
             force_close=False,           # 启用连接复用
             enable_cleanup_closed=True,   # 启用连接清理
             ttl_dns_cache=300,           # DNS缓存5分钟
-            keepalive_timeout=300        # 保持连接300秒
+            keepalive_timeout=60        # 保持连接60秒(减少)
         )
 
         headers = self._build_headers()

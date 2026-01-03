@@ -383,11 +383,12 @@ class KiroNonStreamService(KiroBaseService):
             if proxy:
                 logger.info(f'[Kiro] 非流式使用代理请求: {proxy}')
 
-            # 使用更长的超时时间来处理高并发情况
+            # 使用优化的超时时间来处理高并发情况
             request_timeout = aiohttp.ClientTimeout(
-                total=300,      # 5分钟总超时
-                connect=30,      # 30秒连接超时
-                sock_read=120    # 120秒读取超时(增加以应对高并发)
+                total=180,      # 3分钟总超时(优化)
+                connect=15,      # 15秒连接超时(优化)
+                sock_connect=10,  # 10秒socket连接超时
+                sock_read=60     # 60秒读取超时(优化)
             )
 
             async with self.session.post(
