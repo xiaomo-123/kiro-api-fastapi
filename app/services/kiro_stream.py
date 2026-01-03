@@ -529,6 +529,7 @@ class KiroStreamService(KiroBaseService):
             error_msg = str(e)
             # 忽略代理服务器返回的错误（如500错误）和Invalid HTTP request错误，不打印日志
             if isinstance(e, ClientHttpProxyError) or 'Invalid HTTP request' in error_msg:
+                yield {"error": f"Proxy error: {error_msg}"}
                 return
             
             logger.error(f'[Kiro] API call failed: {e}')

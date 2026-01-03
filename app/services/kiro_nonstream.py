@@ -248,8 +248,31 @@ class KiroNonStreamService(KiroBaseService):
 
         return result.strip()
 
-    def _process_api_response(self, response: Dict) -> Dict:
-        """处理 API 响应"""
+    def _process_api_response(self, response: Optional[Dict]) -> Dict:
+        """处理 API 响应
+        
+        Args:
+            response: API 响应字典，可能为 None
+            
+        Returns:
+            Dict: 处理后的响应字典
+        """
+        # 检查响应是否为 None
+        if response is None:
+            logger.error('[Kiro] API response is None')
+            return {
+                'responseText': '',
+                'toolCalls': []
+            }
+        
+        # 检查响应是否包含错误
+        if 'error' in response:
+            logger.error(f'[Kiro] API response contains error: {response["error"]}')
+            return {
+                'responseText': f'Error: {response["error"]}',
+                'toolCalls': []
+            }
+        
         # 从响应中提取文本
         raw_text = str(response.get('completion', ''))
 
@@ -515,7 +538,7 @@ class KiroNonStreamService(KiroBaseService):
             
             # 忽略代理服务器返回的错误（如500错误）和Invalid HTTP request错误，不打印日志
             if isinstance(e, ClientHttpProxyError) or 'Invalid HTTP request' in error_msg:
-                return
+                return {"error": f"Proxy error: {error_msg}"}
             
             logger.error(f'[Kiro] API call failed: {e}')
 
