@@ -380,7 +380,7 @@ class KiroStreamService(KiroBaseService):
                 headers=headers,
                 timeout=request_timeout,
                 proxy=proxy,
-                ssl=False
+                ssl=False if settings.PROXY_DISABLE_SSL else None
             ) as response:
                 # 打印响应状态
                 logger.info(f'[Kiro Stream] Response status: {response.status}')

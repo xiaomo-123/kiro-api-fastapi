@@ -47,9 +47,9 @@ def test_proxy(proxy_url, target_url):
         response = session.get(
             target_url,
             proxies=proxies,
-            timeout=10,                   # 30秒超时
+            timeout=30,                   # 30秒超时
             verify=False,                 # 禁用SSL证书验证
-            
+            allow_redirects=False         # 禁用自动重定向
         )
 
         print(f"✅ 请求成功 | 状态码: {response.status_code}")

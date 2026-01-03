@@ -165,6 +165,46 @@ class KiroBaseService:
             logger.error(f'[Kiro] Failed to load account from pool: {e}')
             return None
 
+    async def _validate_proxy_connection(self, proxy_url: str) -> bool:
+        """验证代理连接是否可用
+        
+        Args:
+            proxy_url: 代理URL
+            
+        Returns:
+            bool: 代理是否可用
+        """
+        try:
+            import aiohttp
+            # 使用配置的超时时间
+            test_timeout = aiohttp.ClientTimeout(
+                total=settings.PROXY_VALIDATE_TIMEOUT,
+                connect=3,
+                sock_read=2
+            )
+            async with aiohttp.ClientSession(timeout=test_timeout) as session:
+                try:
+                    # 使用更简单的测试端点
+                    async with session.get(
+                        'http://www.google.com',
+                        proxy=proxy_url,
+                        ssl=False,
+                        allow_redirects=False
+                    ) as response:
+                        # 接受2xx和3xx状态码
+                        if 200 <= response.status < 400:
+                            logger.info(f'[Kiro] Proxy connection validated: {proxy_url}')
+                            return True
+                        else:
+                            logger.warning(f'[Kiro] Proxy returned status {response.status}: {proxy_url}')
+                            return False
+                except Exception as e:
+                    logger.warning(f'[Kiro] Proxy connection failed: {proxy_url}, error: {e}')
+                    return False
+        except Exception as e:
+            logger.error(f'[Kiro] Proxy validation error: {e}')
+            return False
+
     async def _load_proxy_from_pool(self) -> Optional[str]:
         """从代理池获取可用代理"""
         try:
@@ -190,16 +230,38 @@ class KiroBaseService:
             password = proxy_data.get('password', '')
 
             # 构建代理URL，强制使用HTTP协议以避免TLS in TLS问题
+            # 清理代理URL，移除可能存在的协议前缀
+            proxy_url_clean = proxy_url.strip()
+            if proxy_url_clean.startswith("http://"):
+                proxy_url_clean = proxy_url_clean[7:]
+            elif proxy_url_clean.startswith("https://"):
+                proxy_url_clean = proxy_url_clean[8:]
+                logger.warning(f'[Kiro] Detected HTTPS proxy URL, converting to HTTP to avoid TLS in TLS issues')
+            
             proxy_url_str = "http://"
             if username and password:
                 proxy_url_str += f"{username}:{password}@"
             # 确保端口号正确地添加到主机名后面
             if proxy_port:
-                proxy_url_str += f"{proxy_url}:{proxy_port}"
+                proxy_url_str += f"{proxy_url_clean}:{proxy_port}"
             else:
-                proxy_url_str += proxy_url
+                proxy_url_str += proxy_url_clean
+            
+            # 验证代理URL格式
+            if not proxy_url_str.startswith("http://") and not proxy_url_str.startswith("https://"):
+                logger.error(f'[Kiro] Invalid proxy URL format: {proxy_url_str}')
+                return None
 
-            logger.info(f'[Kiro] Successfully loaded proxy {proxy_id} from pool: {proxy_url_str}')
+            # 根据配置决定是否验证代理连接
+            if settings.PROXY_VALIDATE_ON_LOAD:
+                if not await self._validate_proxy_connection(proxy_url_str):
+                    logger.warning(f'[Kiro] Proxy connection validation failed, marking proxy {proxy_id} as unhealthy')
+                    await self._disable_proxy(proxy_id)
+                    return None
+                logger.info(f'[Kiro] Successfully loaded and validated proxy {proxy_id} from pool: {proxy_url_str}')
+            else:
+                logger.info(f'[Kiro] Successfully loaded proxy {proxy_id} from pool (validation skipped): {proxy_url_str}')
+
             return proxy_url_str
         except Exception as e:
             logger.error(f'[Kiro] Failed to load proxy from pool: {e}')
