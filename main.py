@@ -171,7 +171,7 @@ if __name__ == '__main__':
     import multiprocessing
 
     # 从环境变量获取配置，如果没有则使用默认值
-    workers = int(os.getenv('UVICORN_WORKERS', str(multiprocessing.cpu_count() * 2)))
+    workers = int(os.getenv('UVICORN_WORKERS', str(multiprocessing.cpu_count() * 1)))
     host = os.getenv('UVICORN_HOST', settings.HOST)
     port = int(os.getenv('UVICORN_PORT', str(settings.SERVER_PORT)))
     limit_concurrency = int(os.getenv('UVICORN_LIMIT_CONCURRENCY', '200'))

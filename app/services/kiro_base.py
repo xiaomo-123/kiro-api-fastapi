@@ -8,6 +8,8 @@ from typing import Optional, Dict, List, Any
 from datetime import datetime, timedelta, timezone
 from .proxy_pool import update_proxy
 from ..config import settings
+from .proxy_pool import redis_client
+import time   
 from ..utils import (
     load_json_file,
     generate_machine_id,
@@ -71,6 +73,11 @@ class KiroBaseService:
         self.current_account_index: int = 0  # 当前使用的账号索引
         self.current_account_id: Optional[int] = None  # 当前使用的账号ID
         self.account_lock = asyncio.Lock()  # 账号切换锁
+        
+        # 代理健康度检查相关属性
+        self.proxy_health_check_task: Optional[asyncio.Task] = None  # 健康度检查任务
+        self.proxy_health_check_interval: int = 300  # 健康度检查间隔（秒）
+        self.proxy_health_check_enabled: bool = True  # 是否启用健康度检查
 
     def _generate_machine_id(self):
         """生成机器ID"""
@@ -201,7 +208,7 @@ class KiroBaseService:
     async def _has_multiple_proxies(self) -> bool:
         """检查是否有多个可用代理"""
         try:
-            from .proxy_pool import redis_client
+            
             if redis_client is None:
                 return False
             
@@ -267,7 +274,7 @@ class KiroBaseService:
             if not self.current_proxy_id:
                 return False
 
-            from .proxy_pool import redis_client
+            
             if redis_client is None:
                 return False
 
@@ -282,17 +289,66 @@ class KiroBaseService:
             error_count += 1
             redis_client.hset(proxy_key, "error_count", str(error_count))
 
-            # 初始化记录最后错误时间
-            redis_client.hset(proxy_key, "last_error_time", str(int(time.time())))
+            # 初始化记录最后错误时间（如果为空才设置）
+            last_error_time = redis_client.hget(proxy_key, "last_error_time")
+            if not last_error_time:
+                redis_client.hset(proxy_key, "last_error_time", str(int(time.time())))
 
             # 计算新的评分：score = score - error_count
             new_score = max(0, current_score - error_count)
-            redis_client.hset(proxy_key, "score", str(new_score))           
-            
-            return switched
+            redis_client.hset(proxy_key, "score", str(new_score))                                 
+            return True
         except Exception as e:
             logger.error(f'[Kiro] Failed to handle proxy error: {e}')
             return False
+
+    async def _start_proxy_health_check_loop(self):
+        """启动代理健康度检查循环任务"""
+        if not self.proxy_health_check_enabled:
+            logger.info('[Kiro] Proxy health check is disabled')
+            return
+
+        if self.proxy_health_check_task is not None and not self.proxy_health_check_task.done():
+            logger.info('[Kiro] Proxy health check task is already running')
+            return
+
+        async def health_check_loop():
+            """健康度检查循环"""
+            while self.proxy_health_check_enabled:
+                try:
+                    logger.info('[Kiro] Starting proxy health check...')
+                    recovered_count = await self._check_and_recover_proxies()
+                    if recovered_count > 0:
+                        logger.info(f'[Kiro] Health check completed, recovered {recovered_count} proxies')
+                    else:
+                        logger.info('[Kiro] Health check completed, no proxies recovered')
+                    
+                    # 等待下一次检查
+                    await asyncio.sleep(self.proxy_health_check_interval)
+                except asyncio.CancelledError:
+                    logger.info('[Kiro] Proxy health check task cancelled')
+                    break
+                except Exception as e:
+                    logger.error(f'[Kiro] Error in health check loop: {e}')
+                    await asyncio.sleep(self.proxy_health_check_interval)
+
+        self.proxy_health_check_task = asyncio.create_task(health_check_loop())
+        logger.info('[Kiro] Proxy health check loop started')
+
+    async def _stop_proxy_health_check(self):
+        """停止代理健康度检查循环任务"""
+        if self.proxy_health_check_task is None:
+            return
+
+        if not self.proxy_health_check_task.done():
+            self.proxy_health_check_task.cancel()
+            try:
+                await self.proxy_health_check_task
+            except asyncio.CancelledError:
+                pass
+
+        self.proxy_health_check_task = None
+        logger.info('[Kiro] Proxy health check loop stopped')
 
     async def _switch_to_next_proxy(self) -> bool:
         """切换到下一个可用代理（不标记为失败）
@@ -300,45 +356,13 @@ class KiroBaseService:
         Args:
             force: 是否强制切换，不检查失败次数
         """""
-        try:
-            from .proxy_pool import redis_client
-            import time
-
+        try:       
+            
             # 检查是否有多个可用代理
             has_multiple = await self._has_multiple_proxies()
             if not has_multiple:
                 logger.info('[Kiro] Only one proxy available, not switching')
-                return False
-
-            # 检查并尝试恢复被禁用的代理
-            if redis_client:
-                # 获取所有代理键
-                proxy_keys = redis_client.keys("proxy_pool:*")
-                current_time = int(time.time())
-
-                for key in proxy_keys:
-                    # 获取代理ID
-                    proxy_id_str = key.split(":")[-1]
-                    try:
-                        proxy_id = int(proxy_id_str)
-                    except ValueError:
-                        continue
-
-                    # 获取代理数据
-                    proxy_data = redis_client.hgetall(key)
-                    if not proxy_data:
-                        continue                    
-                    # 获取评分和最后错误时间
-                    score = int(proxy_data.get("score", "100"))
-                    last_error_time = int(proxy_data.get("last_error_time", "0"))
-
-                    # 检查是否满足恢复条件
-                    if score > 90 and (current_time - last_error_time) > 60:
-                        # 恢复代理
-                        await self._enable_proxy(proxy_id)
-                        # 重置最后错误时间
-                        redis_client.hset(key, "last_error_time", "0")
-                        logger.info(f'[Kiro] Recovered proxy {proxy_id} with score={score}')
+                return False            
 
             # 从 Redis 代理池获取新的代理
             proxy_url = await self._load_proxy_from_pool()
@@ -405,9 +429,8 @@ class KiroBaseService:
             account = await self._load_account_from_pool()
             if not account:
                 logger.warning('[Kiro] No available account from pool for switching')
-                return False
-            
-            
+                return False         
+         
             
             # 直接使用从Redis获取的账号数据，不再使用内存缓存
                 
@@ -428,7 +451,54 @@ class KiroBaseService:
             self.expires_at = None
             
             return True                       
-   
+    async def _check_and_recover_proxies(self) -> int:
+        """检查并恢复符合条件的代理
+        
+        Returns:
+            int: 恢复的代理数量
+        """
+        try:
+            from .proxy_pool import redis_client
+            import time
+                    
+
+            # 检查并尝试恢复被禁用的代理
+            if redis_client is None:
+                return 0
+                # 获取所有代理键
+            proxy_keys = redis_client.keys("proxy_pool:*")
+            current_time = int(time.time())
+            recovered_count = 0
+
+            for key in proxy_keys:
+                # 获取代理ID
+                proxy_id_str = key.split(":")[-1]
+                try:
+                    proxy_id = int(proxy_id_str)
+                except ValueError:
+                    continue
+
+                # 获取代理数据
+                proxy_data = redis_client.hgetall(key)
+                if not proxy_data:
+                    continue                    
+                # 获取评分和最后错误时间
+                score = int(proxy_data.get("score", "100"))
+                last_error_time = int(proxy_data.get("last_error_time", "0"))
+
+                # 检查是否满足恢复条件
+                if score > 90 and (current_time - last_error_time) > 60:
+                    # 恢复代理
+                    await self._enable_proxy(proxy_id)
+                    # 重置最后错误时间
+                    redis_client.hset(key, "last_error_time", "0")
+                    logger.info(f'[Kiro] Recovered proxy {proxy_id} with score={score}')
+                    recovered_count += 1
+        
+            return recovered_count
+        except Exception as e:
+            logger.error(f'[Kiro] Failed to check and recover proxies: {e}')
+            return 0        
     async def initialize(self):
         """初始化服务"""
         if self.is_initialized:
@@ -489,6 +559,9 @@ class KiroBaseService:
 
         self.is_initialized = True
         logger.info('[Kiro] Kiro API Service initialized successfully')
+        
+        # 启动代理健康度检查循环
+        await self._start_proxy_health_check_loop()
 
         # 记录连接池配置信息
         logger.info(f'[Kiro] Connection pool configured: '

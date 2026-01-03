@@ -437,17 +437,16 @@ class KiroStreamService(KiroBaseService):
                     async for event in self._stream_api_real(method, model, body, is_retry, retry_count + 1):
                         yield event
                     return
-                if response.status == 500 and is_retry:                    
-                    await self._handle_proxy_error()
-                    await self._disable_current_account()
-                    await self._switch_to_next_account()
+                
+                    
                     
                 if 500 <= response.status < 600 and retry_count < max_retries:
                     # 如果使用代理且返回500错误，处理代理错误
                     if self.proxy:
                         logger.warning(f'[Kiro] Received {response.status} with proxy, handling proxy error...')
                         await self._handle_proxy_error()
-                       
+                        await self._disable_proxy(self.current_proxy_id)
+                        await self._switch_to_next_proxy()
 
                     delay = base_delay * (2 ** retry_count)
                     logger.info(f'[Kiro] Received {response.status}. Retrying in {delay}s... (attempt {retry_count + 1}/{max_retries})')
@@ -527,7 +526,6 @@ class KiroStreamService(KiroBaseService):
 
         except aiohttp.ClientError as e:
             error_msg = str(e)
-            
             # 忽略代理服务器返回的错误（如500错误）和Invalid HTTP request错误，不打印日志
             if isinstance(e, ClientHttpProxyError) or 'Invalid HTTP request' in error_msg:
                 return
@@ -542,12 +540,18 @@ class KiroStreamService(KiroBaseService):
                         yield event
                     return
 
-            # 如果是代理连接错误，禁用当前代理并重试
+            # 如果是代理连接错误，优雅切换到下一个代理并重试
             if isinstance(e, (ClientProxyConnectionError, ClientConnectorError, ClientConnectorSSLError)) or 'proxy' in error_msg.lower():
                 
                     # 禁用代理后重试，不使用代理
-                async for event in self._stream_api_real(method, model, body, is_retry, retry_count):
-                    yield event
+                logger.warning(f'[Kiro] Proxy connection error: {e}')
+                # 优雅切换到下一个代理
+                if await self._handle_proxy_error():
+                    await self._disable_proxy(self.current_proxy_id)
+                    await self._switch_to_next_proxy()
+                    logger.info('[Kiro] Retrying with new proxy...')
+                    async for event in self._stream_api_real(method, model, body, is_retry, retry_count):
+                        yield event
                 return
 
             raise
