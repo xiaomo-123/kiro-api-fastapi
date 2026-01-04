@@ -329,10 +329,10 @@ class KiroBaseService:
         """
         try:            
             await update_proxy(proxy_id, status="1")  
-            logger.info(f'[Kiro] Enabled proxy {proxy_id} ')
+            logger.info(f'[Kiro] 恢复代理id {proxy_id} ')
             return True
         except Exception as e:
-            logger.error(f'[Kiro] Failed to enable proxy {proxy_id}: {e}')
+            logger.error(f'[Kiro] Failed to enable proxy id {proxy_id}: {e}')
             return False
 
     async def _handle_proxy_error(self) -> bool:
@@ -559,7 +559,7 @@ class KiroBaseService:
                     await self._enable_proxy(proxy_id)
                     # 重置最后错误时间
                     redis_client.hset(key, "last_error_time", "0")
-                    logger.info(f'[Kiro] Recovered proxy {proxy_id} with score={score}')
+                    logger.info(f'[Kiro] 重启代理 {key} with score={score}')
                     recovered_count += 1
         
             return recovered_count
@@ -572,17 +572,13 @@ class KiroBaseService:
             return
 
         logger.info('[Kiro] Initializing Kiro API Service...')
-
         # 从 Redis 代理池加载代理
         self.proxy = await self._load_proxy_from_pool()
-
         # 打印代理状态
         if self.proxy:
-            logger.info(f'[Kiro] Using proxy from pool: {self.proxy}')
-            print(f'[Kiro Proxy] Proxy enabled: {self.proxy}')
+            logger.info(f'[Kiro] Using proxy from pool: {self.proxy}')            
         else:
-            logger.info('[Kiro] No proxy configured, using direct connection')
-            print('[Kiro Proxy] No proxy, using direct connection')
+            logger.info('[Kiro] No proxy configured, using direct connection')          
 
         # 从 Redis 账号池加载账号
         account = await self._load_account_from_pool()
