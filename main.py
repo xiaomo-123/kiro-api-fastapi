@@ -27,14 +27,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# 抑制 aiohttp 的警告日志
 logging.getLogger('aiohttp').setLevel(logging.ERROR)
 logging.getLogger('aiohttp.access').setLevel(logging.ERROR)
 logging.getLogger("uvicorn.protocols.http.h11_impl").setLevel(logging.ERROR)
-# 抑制 uvicorn 的访问日志（可选）
 logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
 logging.getLogger("uvicorn.server").setLevel(logging.WARNING)
+
+# ✅ 新增3行：全覆盖协议层日志器，彻底封杀Invalid HTTP警告
 logging.getLogger("uvicorn.protocols.http").setLevel(logging.CRITICAL)
+logging.getLogger("uvicorn.protocols").setLevel(logging.CRITICAL)
+logging.getLogger("h11").setLevel(logging.CRITICAL)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
