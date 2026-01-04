@@ -32,7 +32,7 @@ logging.getLogger('aiohttp').setLevel(logging.ERROR)
 logging.getLogger('aiohttp.access').setLevel(logging.ERROR)
 
 # 抑制 uvicorn 的访问日志（可选）
-logging.getLogger('uvicorn.access').setLevel(logging.WARNING)
+logging.getLogger("uvicorn.protocols.http").setLevel(logging.WARNING)
 
 
 @asynccontextmanager
@@ -191,7 +191,8 @@ if __name__ == '__main__':
         host=host,
         port=port,
         workers=workers,              # 从环境变量或默认值获取
-        log_level='info',
+        log_level="debug",
+        access_log=True, 
         limit_concurrency=limit_concurrency,       # 从环境变量或默认值获取
         timeout_keep_alive=timeout_keep_alive,        # 从环境变量或默认值获取
         backlog=backlog,                # 从环境变量或默认值获取
