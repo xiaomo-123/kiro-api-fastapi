@@ -34,7 +34,7 @@ logging.getLogger("uvicorn.protocols.http.h11_impl").setLevel(logging.ERROR)
 # 抑制 uvicorn 的访问日志（可选）
 logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
 logging.getLogger("uvicorn.server").setLevel(logging.WARNING)
-
+logging.getLogger("uvicorn.protocols.http").setLevel(logging.CRITICAL)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
