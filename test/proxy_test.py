@@ -4,8 +4,9 @@ import sys
 import urllib3
 
 # -------------------------- 全局配置（仅改代理，其余不变） --------------------------
-PROXY = "205.185.120.206:25565"  # 你的HTTP代理【IP:端口】，直接替换即可
-AMAZON_URL = "https://www.amazon.com"
+PROXY = "127.0.0.1:10809"  # 你的HTTP代理【IP:端口】，直接替换即可
+# PROXY = "205.185.120.206:25565"  # 你的HTTP代理【IP:端口】，直接替换即可
+AMAZON_URL = "https://codewhisperer.us-east-1.amazonaws.com"
 
 # 禁用SSL证书警告（亚马逊HTTPS站点必备）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

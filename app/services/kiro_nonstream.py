@@ -397,7 +397,13 @@ class KiroNonStreamService(KiroBaseService):
 
         headers = {
             'Authorization': f'Bearer {self.access_token}',
-            'amz-sdk-invocation-id': str(uuid.uuid4())
+            'amz-sdk-invocation-id': str(uuid.uuid4()),
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1"
         }
 
         try:
@@ -406,24 +412,32 @@ class KiroNonStreamService(KiroBaseService):
             if proxy:
                 logger.info(f'[Kiro] 非流式使用代理请求: {proxy}')
 
-            # # 使用优化的超时时间来处理高并发情况
-            # request_timeout = aiohttp.ClientTimeout(
-            #     total=180,      # 3分钟总超时(优化)
-            #     connect=15,      # 15秒连接超时(优化)
-            #     sock_connect=10,  # 10秒socket连接超时
-            #     sock_read=60     # 60秒读取超时(优化)
-            # ) aiohttp.ClientTimeout(total=30),
+            # 使用优化的超时时间来处理高并发情况
+            request_timeout = aiohttp.ClientTimeout(
+                total=180,      # 3分钟总超时(优化)
+                connect=15,      # 15秒连接超时(优化)
+                sock_connect=10,  # 10秒socket连接超时
+                sock_read=60     # 60秒读取超时(优化)
+            )
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                        request_url,
-                        json=request_data,
-                        headers=headers,
-                        timeout=aiohttp.ClientTimeout(total=30),
-                        proxy=proxy,
-                        ssl=False
-                    ) as response:                
+            async with self.session.post(
+                    request_url,
+                    json=request_data,
+                    headers=headers,
+                    timeout=request_timeout,
+                    proxy=proxy,
+                    ssl=False
+                ) as response:                
                         logger.info(f'[Kiro] Response status: {response.status}')
+                        print(f"\n📋 响应头信息：")
+                        for k, v in dict(response.headers).items():
+                            print(f"  {k}: {v}")
+                        
+                        # ✅ 无条件打印响应内容（适配500/403/200所有状态）
+                        print("\n📄 亚马逊响应内容预览（前1500字符）：")
+                        html_content = await response.text()
+                        print(html_content[:1500])  # 打印前1500字符，足够排查问题
+                        print("=" * 80)
                         if response.status == 503:
                             logger.warning('[Kiro] Received 503 after token refresh. Disabling current account and switching...')
                             # 禁用当前账号
@@ -527,6 +541,8 @@ class KiroNonStreamService(KiroBaseService):
                         import time
                         request_duration = time.time() - request_start_time
                         logger.info(f'[Kiro] Request completed in {request_duration:.3f}s (model={model}, retry_count={retry_count})')
+
+                        
 
                         return response_data
 
