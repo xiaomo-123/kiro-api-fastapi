@@ -435,9 +435,16 @@ class KiroNonStreamService(KiroBaseService):
                         
                         # ✅ 无条件打印响应内容（适配500/403/200所有状态）
                         print("\n📄 亚马逊响应内容预览（前1500字符）：")
-                        html_content = await response.text()
-                        print(html_content[:1500])  # 打印前1500字符，足够排查问题
-                        print("=" * 80)
+                        try:
+                            # 方案1：二进制读取 + 指定编码解码（优先latin-1，兼容所有字节，永不报错）
+                            response_bytes = await response.read()  # 读取原始二进制内容（万能）
+                            # 优先用latin-1解码（兼容任意字节，不会崩溃），备选utf-8/gbk
+                            html_content = response_bytes.decode("latin-1", errors="ignore")
+                            print(html_content[:1500])
+                        except Exception as e:
+                            # 方案2：容错兜底 - 强制UTF-8解码，忽略错误字节
+                            html_content = await response.text(encoding="utf-8", errors="ignore")
+                            print(html_content[:1500])
                         if response.status == 503:
                             logger.warning('[Kiro] Received 503 after token refresh. Disabling current account and switching...')
                             # 禁用当前账号

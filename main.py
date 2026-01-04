@@ -59,9 +59,9 @@ async def lifespan(app: FastAPI):
     logger.info('Proxy pool initialized')
 
     # 初始化并启动心跳服务
-    heartbeat_service.init_app(app)
-    heartbeat_service.start()
-    logger.info('Heartbeat service started')
+    # heartbeat_service.init_app(app)
+    # heartbeat_service.start()
+    # logger.info('Heartbeat service started')
 
     # 注意：Kiro服务将在首次使用时初始化，而不是在启动时
     # 这样可以避免因为没有可用账号而导致服务无法启动

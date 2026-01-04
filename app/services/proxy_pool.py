@@ -71,6 +71,7 @@ async def initialize_pool():
             pipe.delete("available_proxies")
 
             for proxy in proxies:
+                logger.info(f"代理加入:{proxy.proxy_url}:{proxy.proxy_port}")
                 proxy_key = f"proxy_pool:{proxy.id}"
                 pipe.hset(proxy_key, "id", str(proxy.id))
                 pipe.hset(proxy_key, "proxy_type", proxy.proxy_type)
