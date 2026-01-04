@@ -47,6 +47,13 @@ services:
   app:
     build: .
     container_name: kiro-api
+    network_mode: bridge
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 114.114.114.114
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "5431:5431"
     environment:

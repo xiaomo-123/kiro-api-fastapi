@@ -422,8 +422,7 @@ class KiroNonStreamService(KiroBaseService):
                         timeout=aiohttp.ClientTimeout(total=30),
                         proxy=proxy,
                         ssl=False
-                    ) as response:                # 打印响应状态
-                
+                    ) as response:                
                         logger.info(f'[Kiro] Response status: {response.status}')
                         if response.status == 503:
                             logger.warning('[Kiro] Received 503 after token refresh. Disabling current account and switching...')
