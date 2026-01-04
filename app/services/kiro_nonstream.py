@@ -412,126 +412,124 @@ class KiroNonStreamService(KiroBaseService):
             #     connect=15,      # 15秒连接超时(优化)
             #     sock_connect=10,  # 10秒socket连接超时
             #     sock_read=60     # 60秒读取超时(优化)
-            # )
+            # ) aiohttp.ClientTimeout(total=30),
 
-            async with self.session.post(
-                request_url,
-                json=request_data,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=30),
-                proxy=proxy,
-                ssl=False 
-            ) as response:                # 打印响应状态
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                        request_url,
+                        json=request_data,
+                        headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=30),
+                        proxy=proxy,
+                        ssl=False
+                    ) as response:                # 打印响应状态
                 
-                logger.info(f'[Kiro] Response status: {response.status}')
-                if response.status == 503:
-                    logger.warning('[Kiro] Received 503 after token refresh. Disabling current account and switching...')
-                    # 禁用当前账号
-                    await self._disable_current_account()
-                    # 切换到下一个账号
-                    switched_account = await self._switch_to_next_account()
-                    if switched_account:
-                        # 切换账号后重新尝试
-                        await self._ensure_token(force_refresh=True)
-                        return await self._call_api(method, model, body, False, retry_count)
-                    else:
-                        # 无法切换账号，返回错误信息
-                        error_text = await response.text()
-                        logger.error(f'[Kiro] No available accounts to switch to. API call failed: {error_text}')
-                        return {"error": f"Account suspended and no available accounts to switch: {error_text}"}
-                if response.status == 403 and not is_retry:
-                    logger.info('[Kiro] Received 403. Attempting token refresh and retrying...')
-                    # 刷新令牌后重新尝试
-                    await self._ensure_token(force_refresh=True)
-                    return await self._call_api(method, model, body, True, retry_count)
-                
-                # 如果收到403错误且已经刷新过令牌，禁用当前账号并切换到下一个账号
-                if response.status == 403 and is_retry:
-                    logger.warning('[Kiro] Received 403 after token refresh. Disabling current account and switching...')
-                    # 禁用当前账号
-                    await self._handle_proxy_error()                    
-                    await self._disable_current_account()
-                    # 切换到下一个账号
-                    switched_account = await self._switch_to_next_account()
-                    if switched_account:
-                        # 切换账号后重新尝试
-                        await self._ensure_token(force_refresh=True)
-                        return await self._call_api(method, model, body, False, retry_count)
-                    else:
-                        # 无法切换账号，返回错误信息
-                        error_text = await response.text()
-                        logger.error(f'[Kiro] No available accounts to switch to. API call failed: {error_text}')
-                        return {"error": f"Account suspended and no available accounts to switch: {error_text}"}
+                        logger.info(f'[Kiro] Response status: {response.status}')
+                        if response.status == 503:
+                            logger.warning('[Kiro] Received 503 after token refresh. Disabling current account and switching...')
+                            # 禁用当前账号
+                            await self._disable_current_account()
+                            # 切换到下一个账号
+                            switched_account = await self._switch_to_next_account()
+                            if switched_account:
+                                # 切换账号后重新尝试
+                                await self._ensure_token(force_refresh=True)
+                                return await self._call_api(method, model, body, False, retry_count)
+                            else:
+                                # 无法切换账号，返回错误信息
+                                error_text = await response.text()
+                                logger.error(f'[Kiro] No available accounts to switch to. API call failed: {error_text}')
+                                return {"error": f"Account suspended and no available accounts to switch: {error_text}"}
+                        if response.status == 403 and not is_retry:
+                            logger.info('[Kiro] Received 403. Attempting token refresh and retrying...')
+                            # 刷新令牌后重新尝试
+                            await self._ensure_token(force_refresh=True)
+                            return await self._call_api(method, model, body, True, retry_count)
+                        
+                        # 如果收到403错误且已经刷新过令牌，禁用当前账号并切换到下一个账号
+                        if response.status == 403 and is_retry:
+                            logger.warning('[Kiro] Received 403 after token refresh. Disabling current account and switching...')
+                            # 禁用当前账号
+                            await self._handle_proxy_error()                    
+                            await self._disable_current_account()
+                            # 切换到下一个账号
+                            switched_account = await self._switch_to_next_account()
+                            if switched_account:
+                                # 切换账号后重新尝试
+                                await self._ensure_token(force_refresh=True)
+                                return await self._call_api(method, model, body, False, retry_count)
+                            else:
+                                # 无法切换账号，返回错误信息
+                                error_text = await response.text()
+                                logger.error(f'[Kiro] No available accounts to switch to. API call failed: {error_text}')
+                                return {"error": f"Account suspended and no available accounts to switch: {error_text}"}
 
-                if response.status == 429 and retry_count < max_retries:
-                    delay = base_delay * (2 ** retry_count)
-                    logger.info(f'[Kiro] Received 429. Retrying in {delay}s... (attempt {retry_count + 1}/{max_retries})')
-                    await asyncio.sleep(delay)
-                    return await self._call_api(method, model, body, is_retry, retry_count + 1)
-                                  
-                    
-                if 500 <= response.status < 600 and retry_count < max_retries:
-                    # 如果使用代理且返回500错误，禁用当前代理
-                    if self.proxy:
-                        logger.warning(f'[Kiro] Received {response.status} with proxy, disabling proxy...')
-                        await self._handle_proxy_error()
-                        await self._disable_proxy(self.current_proxy_id)
-                        await self._switch_to_next_proxy()
+                        if response.status == 429 and retry_count < max_retries:
+                            delay = base_delay * (2 ** retry_count)
+                            logger.info(f'[Kiro] Received 429. Retrying in {delay}s... (attempt {retry_count + 1}/{max_retries})')
+                            await asyncio.sleep(delay)
+                            return await self._call_api(method, model, body, is_retry, retry_count + 1)
+                                        
+                            
+                        if 500 <= response.status < 600 and retry_count < max_retries:
+                            # 如果使用代理且返回500错误，禁用当前代理
+                            if self.proxy:
+                                logger.warning(f'[Kiro] Received {response.status} with proxy, disabling proxy...')
+                                await self._handle_proxy_error()
+                                await self._disable_proxy(self.current_proxy_id)
+                                await self._switch_to_next_proxy()
 
-                    delay = base_delay * (2 ** retry_count)
-                    logger.info(f'[Kiro] Received {response.status}. Retrying in {delay}s... (attempt {retry_count + 1}/{max_retries})')
-                    await asyncio.sleep(delay)
-                    return await self._call_api(method, model, body, is_retry, retry_count + 1)
+                            delay = base_delay * (2 ** retry_count)
+                            logger.info(f'[Kiro] Received {response.status}. Retrying in {delay}s... (attempt {retry_count + 1}/{max_retries})')
+                            await asyncio.sleep(delay)
+                            return await self._call_api(method, model, body, is_retry, retry_count + 1)
 
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f'[Kiro] API call failed with status {response.status}: {error_text}')
-                    raise Exception(f'API call failed: {response.status} - {error_text}')
+                        if response.status != 200:
+                            error_text = await response.text()
+                            logger.error(f'[Kiro] API call failed with status {response.status}: {error_text}')
+                            raise Exception(f'API call failed: {response.status} - {error_text}')             
+                        try:
+                            # 检查响应头中的Content-Encoding
+                            content_encoding = response.headers.get('Content-Encoding', '').lower()
 
-                # 获取原始响应数据，与JS代码保持一致
-                # JS代码: const rawResponseText = Buffer.isBuffer(response.data) ? response.data.toString('utf8') : String(response.data);
-                try:
-                    # 检查响应头中的Content-Encoding
-                    content_encoding = response.headers.get('Content-Encoding', '').lower()
+                            # 先获取原始字节数据
+                            raw_bytes = await response.read()
 
-                    # 先获取原始字节数据
-                    raw_bytes = await response.read()
-
-                    # 尝试解码为UTF-8字符串
-                    try:
-                        response_text = raw_bytes.decode('utf-8')
-                    except UnicodeDecodeError:
-                        # 如果UTF-8解码失败，尝试解压gzip
-                        if 'gzip' in content_encoding or raw_bytes[:2] == b'\x1f\x8b':
+                            # 尝试解码为UTF-8字符串
                             try:
-                                response_text = gzip.decompress(raw_bytes).decode('utf-8')
-                                logger.info('[Kiro] Successfully decompressed gzip response')
-                            except Exception as gzip_error:
-                                logger.error(f'[Kiro] Failed to decompress gzip: {gzip_error}')
-                                raise Exception('Failed to decompress gzip response')
-                        else:
-                            # AWS Event Stream格式 - 解析二进制协议
-                            # 格式: [总长度(4字节)][头部长度(4字节)][头部数据][预签名头部(4字节)][payload]
-                            response_text = self._parse_aws_event_stream(raw_bytes)
+                                response_text = raw_bytes.decode('utf-8')
+                            except UnicodeDecodeError:
+                                # 如果UTF-8解码失败，尝试解压gzip
+                                if 'gzip' in content_encoding or raw_bytes[:2] == b'\x1f\x8b':
+                                    try:
+                                        response_text = gzip.decompress(raw_bytes).decode('utf-8')
+                                        logger.info('[Kiro] Successfully decompressed gzip response')
+                                    except Exception as gzip_error:
+                                        logger.error(f'[Kiro] Failed to decompress gzip: {gzip_error}')
+                                        raise Exception('Failed to decompress gzip response')
+                                else:
+                                    # AWS Event Stream格式 - 解析二进制协议
+                                    # 格式: [总长度(4字节)][头部长度(4字节)][头部数据][预签名头部(4字节)][payload]
+                                    response_text = self._parse_aws_event_stream(raw_bytes)
 
-                    # 尝试解析JSON
-                    try:
-                        response_data = json.loads(response_text)
-                    except json.JSONDecodeError as e:
-                        logger.error(f'[Kiro] Failed to parse JSON: {e}')
-                        logger.error(f'[Kiro] Response text (first 500 chars): {response_text[:500]}')
-                        raise Exception(f'Failed to parse API response as JSON: {e}')
+                            # 尝试解析JSON
+                            try:
+                                response_data = json.loads(response_text)
+                            except json.JSONDecodeError as e:
+                                logger.error(f'[Kiro] Failed to parse JSON: {e}')
+                                logger.error(f'[Kiro] Response text (first 500 chars): {response_text[:500]}')
+                                raise Exception(f'Failed to parse API response as JSON: {e}')
 
-                except Exception as read_error:
-                    logger.error(f'[Kiro] Failed to read response: {read_error}')
-                    raise Exception(f'Failed to read API response: {read_error}')
+                        except Exception as read_error:
+                            logger.error(f'[Kiro] Failed to read response: {read_error}')
+                            raise Exception(f'Failed to read API response: {read_error}')
 
-                # 记录请求处理时间
-                import time
-                request_duration = time.time() - request_start_time
-                logger.info(f'[Kiro] Request completed in {request_duration:.3f}s (model={model}, retry_count={retry_count})')
+                        # 记录请求处理时间
+                        import time
+                        request_duration = time.time() - request_start_time
+                        logger.info(f'[Kiro] Request completed in {request_duration:.3f}s (model={model}, retry_count={retry_count})')
 
-                return response_data
+                        return response_data
 
         except aiohttp.ClientError as e:
             error_msg = str(e)
