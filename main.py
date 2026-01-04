@@ -198,7 +198,7 @@ if __name__ == '__main__':
         backlog=backlog,                # 从环境变量或默认值获取
         timeout_graceful_shutdown=30,  # 优雅关闭超时
         limit_max_requests=10000,     # 每个工作进程最大请求数后重启
-        access_log=False               # 禁用访问日志减少IO
+        # access_log=False               # 禁用访问日志减少IO
     )
 
     # 创建服务器实例
