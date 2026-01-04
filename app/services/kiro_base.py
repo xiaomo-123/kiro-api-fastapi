@@ -176,24 +176,29 @@ class KiroBaseService:
         """
         try:
             import aiohttp
-            # 使用配置的超时时间
-            test_timeout = aiohttp.ClientTimeout(
-                total=settings.PROXY_VALIDATE_TIMEOUT,
-                connect=3,
-                sock_read=2
-            )
-            async with aiohttp.ClientSession(timeout=test_timeout) as session:
+           
+            HEADERS = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1"
+            }
+
+            async with aiohttp.ClientSession() as session:
                 try:
                     # 使用更简单的测试端点
                     async with session.get(
-                        'http://www.google.com',
+                        'https://www.amazon.com',
+                        headers=HEADERS,
                         proxy=proxy_url,
                         ssl=False,
-                        allow_redirects=False
+                        timeout=aiohttp.ClientTimeout(total=30), 
                     ) as response:
                         # 接受2xx和3xx状态码
                         if 200 <= response.status < 400:
-                            logger.info(f'[Kiro] Proxy connection validated: {proxy_url}')
+                            logger.info(f'[Kiro] 代理测试通过: {proxy_url}')
                             return True
                         else:
                             logger.warning(f'[Kiro] Proxy returned status {response.status}: {proxy_url}')
@@ -378,7 +383,7 @@ class KiroBaseService:
             """健康度检查循环"""
             while self.proxy_health_check_enabled:
                 try:
-                    logger.info('[Kiro] Starting proxy health check...')
+                    logger.info('[Kiro] 开始代理健康监控检测...')
                     recovered_count = await self._check_and_recover_proxies()
                     if recovered_count > 0:
                         logger.info(f'[Kiro] Health check completed, recovered {recovered_count} proxies')
