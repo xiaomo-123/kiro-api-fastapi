@@ -1,100 +1,68 @@
-import asyncio
 import aiohttp
-from aiohttp import ClientTimeout
-import warnings
+import asyncio
+import sys
+import urllib3
 
-# 禁用SSL警告
-warnings.filterwarnings('ignore', category=ResourceWarning)
+# -------------------------- 全局配置（仅改代理，其余不变） --------------------------
+PROXY = "127.0.0.1:10808"  # 你的HTTP代理【IP:端口】，直接替换即可
+AMAZON_URL = "https://www.amazon.com"
 
-async def test_proxy(proxy_url, target_url):
-    print(f"\n🔍 测试代理连接...")
-    print(f"📡 代理地址: {proxy_url}")
-    print(f"🎯 目标URL: {target_url}")
-    print("-" * 50)
+# 禁用SSL证书警告（亚马逊HTTPS站点必备）
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# 强化版浏览器请求头（规避亚马逊风控，完全不变）
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1"
+}
+
+# -------------------------- 核心异步请求函数（仅改代理配置，其余完全不变） --------------------------
+async def amazon_proxy_request():
+    print(f"🔍 正在通过 HTTP 代理 {PROXY} 访问亚马逊...")
+    # ✅ 核心改动1：HTTP代理专用配置（aiohttp原生支持，无需额外依赖）
+    proxy_url = f"http://{PROXY}"
+    
     try:
-        # 1. 超时配置
-        timeout = ClientTimeout(
-            total=30,      # 30秒总超时
-            connect=10,    # 10秒连接超时
-            sock_read=20   # 20秒读取超时
-        )
-
-        # 2. 创建SSL上下文 - 关闭SSL证书验证
-        ssl_context = aiohttp.TCPConnector(
-            ssl=False,              # 完全忽略SSL证书验证
-            limit=100,              # 连接池限制
-            force_close=True,       # 强制关闭连接
-            enable_cleanup_closed=True  # 启用连接清理
-        )
-
-        # 3. 会话绑定SSL上下文+超时+代理
-        async with aiohttp.ClientSession(connector=ssl_context, timeout=timeout) as session:
-            print("📡 正在通过代理发送请求...")
+        # ✅ 核心改动2：直接在ClientSession中配置proxy，无需连接器，极简写法
+        async with aiohttp.ClientSession() as session:
             async with session.get(
-                target_url,
-                proxy=proxy_url,
-                allow_redirects=False  # 禁用自动重定向
+                url=AMAZON_URL,
+                headers=HEADERS,
+                proxy=proxy_url,          # 配置HTTP代理（核心）
+                timeout=aiohttp.ClientTimeout(total=30),  # 30秒超时，适配代理
+                ssl=False                 # 关闭SSL校验，解决亚马逊证书报错
             ) as response:
-                print(f"✅ 请求成功 | 状态码: {response.status}")
-                print(f"📋 响应头: {dict(response.headers)}")
-                content = await response.text()
-                print(f"✅ 响应内容(前200字符): {content[:200]}")
+                # 状态码判断（200/301/302均为访问成功，亚马逊跳转属正常）
+                if response.status in [200, 301, 302]:
+                    print("✅ 亚马逊代理访问成功！✅")
+                    print(f"📌 响应状态码：{response.status}")
+                else:
+                    print(f"⚠️  状态码异常：{response.status}（代理链路已通）")
+                    print(f"📋 响应头信息：{dict(response.headers)}")
 
-    except aiohttp.ClientProxyConnectionError as e:
-        print(f"❌ 代理连接失败: {e}")
-        print("⚠️  可能原因：")
-        print("   - 代理IP/端口无效")
-        print("   - 端口未开放")
-        print("   - 代理服务已宕机")
-        print("   - 网络连接问题")
-    except aiohttp.ClientHttpProxyError as e:
-        print(f"❌ 代理HTTP错误: {e}")
-        print(f"⚠️  状态码: {e.status}")
-        print(f"⚠️  消息: {e.message}")
-    except aiohttp.ClientConnectorError as e:
-        print(f"❌ 连接器错误: {e}")
-        print("⚠️  可能原因：")
-        print("   - 目标服务器无法访问")
-        print("   - DNS解析失败")
-        print("   - 网络连接问题")
-    except aiohttp.ClientError as e:
-        print(f"❌ 客户端错误: {type(e).__name__}: {e}")
-    except asyncio.TimeoutError:
-        print(f"❌ 请求超时")
-        print("⚠️  可能原因：")
-        print("   - 代理响应慢")
-        print("   - 网络延迟高")
-        print("   - 目标服务器响应慢")
+                # ✅ 打印亚马逊页面响应内容（前1000字符，不刷屏）
+                html_content = await response.text()
+                print("\n📄 亚马逊页面内容预览（前1000字符）：")
+                print(html_content[:1000])
+                print("=" * 80)
+
     except Exception as e:
-        print(f"❌ 未知错误: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"\n❌ 请求异常：{str(e)}")
+        print("\n💡 快速排查建议：")
+        print("  1. 确认代理软件已启动 + HTTP代理功能开启")
+        print("  2. 核对HTTP代理端口是否为 {PROXY}（软件内查看）")
+        print("  3. 切换【美国节点】后重试（亚马逊强制要求海外IP）")
+        print("  4. 若有账号密码，按格式修改：http://账号:密码@IP:端口")
 
-async def test_all_proxies():
-    # 三个代理地址
-    proxies = [
-        "http://209.141.44.111:25565",
-        "http://107.189.1.92:25565",
-        "http://107.189.1.233:25565"
-    ]
-
-    # 测试目标URL列表
-    target_urls = [
-        "https://www.google.com",
-        "https://www.amazonaws.com"
-    ]
-
-    # 先测试所有代理访问谷歌，再测试所有代理访问亚马逊
-    for target_url in target_urls:
-        print(f"\n{'#'*60}")
-        print(f"测试目标: {target_url}")
-        print(f"{'#'*60}")
-        for i, proxy in enumerate(proxies, 1):
-            print(f"\n{'='*60}")
-            print(f"测试代理 {i}/{len(proxies)}")
-            print(f"{'='*60}")
-            await test_proxy(proxy, target_url)
-
+# -------------------------- 程序入口（兼容Windows/macOS/Linux，完全不变） --------------------------
 if __name__ == "__main__":
-    asyncio.run(test_all_proxies())
+    # Windows系统异步事件循环专属修复（必加，防止报错）
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    
+    # 启动异步主函数
+    asyncio.run(amazon_proxy_request())

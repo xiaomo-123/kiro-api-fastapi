@@ -406,21 +406,21 @@ class KiroNonStreamService(KiroBaseService):
             if proxy:
                 logger.info(f'[Kiro] 非流式使用代理请求: {proxy}')
 
-            # 使用优化的超时时间来处理高并发情况
-            request_timeout = aiohttp.ClientTimeout(
-                total=180,      # 3分钟总超时(优化)
-                connect=15,      # 15秒连接超时(优化)
-                sock_connect=10,  # 10秒socket连接超时
-                sock_read=60     # 60秒读取超时(优化)
-            )
+            # # 使用优化的超时时间来处理高并发情况
+            # request_timeout = aiohttp.ClientTimeout(
+            #     total=180,      # 3分钟总超时(优化)
+            #     connect=15,      # 15秒连接超时(优化)
+            #     sock_connect=10,  # 10秒socket连接超时
+            #     sock_read=60     # 60秒读取超时(优化)
+            # )
 
             async with self.session.post(
                 request_url,
                 json=request_data,
                 headers=headers,
-                timeout=request_timeout,
+                timeout=aiohttp.ClientTimeout(total=30),
                 proxy=proxy,
-                ssl=False if settings.PROXY_DISABLE_SSL else None
+                ssl=False 
             ) as response:                # 打印响应状态
                 
                 logger.info(f'[Kiro] Response status: {response.status}')

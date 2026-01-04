@@ -16,12 +16,12 @@ from ..utils import (
     get_system_runtime_info,
     get_content_text
 )
-
+import urllib3
 from .account_pool import get_available_account, release_account
 from .proxy_pool import get_available_proxy, release_proxy
 
 logger = logging.getLogger(__name__)
-
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # Kiro API 常量
 KIRO_CONSTANTS = {
     'REFRESH_URL': 'https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken',
@@ -687,7 +687,7 @@ class KiroBaseService:
             # print(f"[Kiro Token Refresh] Headers: {json.dumps(headers, indent=2)}")
             # print(f"[Kiro Token Refresh] Body: {json.dumps(body, indent=2)}")
 
-            async with session.post(refresh_url, json=body, headers=headers) as response:
+            async with session.post(refresh_url, json=body, headers=headers,ssl=False,timeout=aiohttp.ClientTimeout(total=30)) as response:
                 # 打印响应信息
                 print(f"[Kiro Token Refresh] Status: {response.status}")
                 # print(f"[Kiro Token Refresh] Headers: {json.dumps(dict(response.headers), indent=2)}")

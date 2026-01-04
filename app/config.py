@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # 代理配置
     PROXY_SERVER: Optional[str] = None
     USE_SYSTEM_PROXY_KIRO: bool = False
-    PROXY_VALIDATE_ON_LOAD: bool = True  # 是否在加载代理时验证连接
+    PROXY_VALIDATE_ON_LOAD: bool = False  # 是否在加载代理时验证连接
     PROXY_VALIDATE_TIMEOUT: int = 5  # 代理验证超时时间（秒）
     PROXY_DISABLE_SSL: bool = True  # 禁用代理SSL验证以避免TLS in TLS问题
 
