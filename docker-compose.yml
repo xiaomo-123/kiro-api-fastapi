@@ -2,6 +2,8 @@ version: "3.8"
 
 services:
   redis:
+    networks:
+      - kiro-network
     image: redis:7-alpine
     container_name: kiro-redis
     ports:
@@ -24,6 +26,8 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: kiro-postgres
+    networks:
+      - kiro-network
     ports:
       - "5432:5432"
     environment:
@@ -47,11 +51,8 @@ services:
   app:
     build: .
     container_name: kiro-api
-    network_mode: bridge
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-      - 114.114.114.114
+    networks:
+      - kiro-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -89,3 +90,7 @@ volumes:
     driver: local
   postgres_data:
     driver: local
+
+networks:
+  kiro-network:
+    driver: bridge
