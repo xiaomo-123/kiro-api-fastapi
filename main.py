@@ -33,7 +33,7 @@ logging.getLogger('aiohttp.access').setLevel(logging.ERROR)
 
 # 抑制 uvicorn 的访问日志（可选）
 logging.getLogger("uvicorn.protocols.http").setLevel(logging.WARNING)
-
+logging.getLogger("uvicorn.server").setLevel(logging.WARNING)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
