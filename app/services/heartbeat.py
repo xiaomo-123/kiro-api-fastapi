@@ -85,7 +85,7 @@ class HeartbeatService:
             try:
                 # 导入并初始化代理池和账号池
                 from app.services.proxy_pool import initialize_pool as init_proxy_pool
-                from app.services.account_pool import initialize_pool as init_account_pool
+                from app.services.account_pool_v2 import initialize_pool as init_account_pool
 
                 # 更新代理池
                 loop.run_until_complete(init_proxy_pool())

@@ -291,7 +291,7 @@ async def initialize_pool():
         logger.error(f"Failed to initialize account pool: {e}")
 
 async def get_available_account() -> Optional[Dict]:
-    """获取可用账号（优先选择并发数低的新账号）"""
+    """获取可用账号（低并发优先 + 新账号加分）"""
     if redis_client is None:
         return await _get_account_from_sqlite()
 
@@ -302,23 +302,44 @@ async def get_available_account() -> Optional[Dict]:
         # 获取最大并发数配置
         max_concurrent = getattr(settings, "ACCOUNT_MAX_CONCURRENT", 5)
 
-        # 获取所有可用账号
+        # 批量获取所有可用账号ID
         account_ids = redis_client.zrange("available_accounts", 0, -1)
+        logger.info(f"Found {len(account_ids)} available accounts in pool")
         if not account_ids:
+            logger.warning("No available accounts in pool")
             return None
 
-        # 第一轮：优先选择新账号（得分高）
-        # 收集所有账号的详细信息
+        # 批量获取所有账号数据
         account_info = []
+        pipe = redis_client.pipeline()
         for acc_id in account_ids:
+            pipe.hgetall(f"account_pool:{acc_id}")
+        accounts_data = pipe.execute()
+
+        # 筛选状态为可用(1)的账号并计算得分
+        valid_accounts = 0
+        status_distribution = {}
+        for acc_id, account_data in zip(account_ids, accounts_data):
+            if not account_data:
+                logger.debug(f"Account {acc_id} skipped: no data")
+                continue
+            
+            status = account_data.get("status", "unknown")
+            status_distribution[status] = status_distribution.get(status, 0) + 1
+            
+            if status != "1":
+                logger.debug(f"Account {acc_id} skipped: status={status}")
+                continue
+            valid_accounts += 1
+        
+        logger.info(f"Account status distribution: {status_distribution}")
+
+        # 计算得分
+        for acc_id, account_data in zip(account_ids, accounts_data):
+            if not account_data or account_data.get("status") != "1":
+                continue
+
             try:
-                account_key = f"account_pool:{acc_id}"
-                account_data = redis_client.hgetall(account_key)
-
-                # 只选择状态为可用(1)的账号
-                if account_data.get("status") != "1":
-                    continue
-
                 # 获取并发数
                 concurrency = await get_account_concurrency(int(acc_id))
 
@@ -334,90 +355,67 @@ async def get_available_account() -> Optional[Dict]:
                     if hours_since_first < 24 and use_count < 10 and error_count < 3:
                         is_new = True
 
-                # 计算账号得分（优先选择新账号，然后选择并发数低的）
-                score = 0
-                if is_new:
-                    score += 100  # 新账号优先
-                score += (max_concurrent - concurrency)  # 并发数低的优先
+                # 计算得分：新账号+100，并发数越低得分越高
+                score = (100 if is_new else 0) + (max_concurrent - concurrency)
 
                 account_info.append({
                     'account_id': acc_id,
                     'account_data': account_data,
                     'concurrency': concurrency,
-                    'is_new': is_new,
                     'score': score
                 })
             except Exception as e:
-                logger.warning(f"Failed to get info for account {acc_id}: {e}")
+                logger.warning(f"Failed to process account {acc_id}: {e}")
                 continue
 
-        # 按得分排序
+        logger.info(f"Found {valid_accounts} valid accounts out of {len(account_ids)} total")
+        # 按得分降序排序
         account_info.sort(key=lambda x: x['score'], reverse=True)
-        # logger.debug(f"Account ranking: {[(a['account_id'], a['score'], a['is_new']) for a in account_info]}")
+        logger.info(f"Top 5 accounts: {[(a['account_id'], a['score'], a['concurrency']) for a in account_info[:5]]}")
 
-        # 第一轮：尝试从得分高的账号开始
-        for info in account_info:
+        # 按顺序尝试获取账号
+        for idx, info in enumerate(account_info):
             account_id = info['account_id']
             account_data = info['account_data']
-            concurrency = info['concurrency']
             lock_key = f"account_lock:{account_id}"
+            account_key = f"account_pool:{account_id}"
 
-            # 尝试获取锁
-            if redis_client.set(lock_key, str(time.time()), nx=True, ex=5):
-                account_key = f"account_pool:{account_id}"
+            logger.debug(f"Trying account {account_id} (rank {idx+1}/{len(account_info)}, score={info['score']}, concurrency={info['concurrency']})")
 
-                # 验证账号状态
-                if not account_data:
-                    redis_client.delete(lock_key)
+            # 尝试获取分布式锁
+            if not redis_client.set(lock_key, str(time.time()), nx=True, ex=5):
+                logger.debug(f"Account {account_id} is locked, skipping")
+                continue
+
+            try:
+                # 二次验证账号状态
+                current_status = redis_client.hget(account_key, "status")
+                logger.debug(f"Account {account_id} current status: {current_status}")
+                if current_status != "1":
+                    logger.warning(f"Account {account_id} status changed to {current_status}, removing from available list")
                     redis_client.zrem("available_accounts", account_id)
                     continue
 
-                if account_data.get("status") != "1":
-                    logger.warning(f"Account {account_id} status is {account_data.get('status')}, skipping")
-                    redis_client.delete(lock_key)
-                    continue
-
-                # 检查账号并发限制
+                # 检查并发限制
                 acquired = await acquire_account(int(account_id), max_concurrent)
+                logger.debug(f"Account {account_id} acquire result: {acquired}")
                 if not acquired:
-                    logger.debug(f"Account {account_id} concurrency limit reached (current: {concurrency}), trying next account")
-                    redis_client.delete(lock_key)
+                    logger.debug(f"Account {account_id} concurrency limit reached")
                     continue
 
-                # 成功获取账号
-                redis_client.hset(account_key, "status", "2")
-                # logger.debug(f"Got account {account_id} from pool (new={info['is_new']}, concurrency: {concurrency})")
+                # 成功获取账号，不改变状态
+                logger.info(f"Successfully acquired account {account_id}")
                 return account_data
+            finally:
+                # 失败时释放锁
+                if redis_client.hget(account_key, "status") != "2":
+                    logger.debug(f"Releasing lock for account {account_id}")
+                    redis_client.delete(lock_key)
 
-        # 第二轮：如果所有账号都达到并发限制，使用轮询方式选择一个账号（即使达到限制也使用）
-        logger.warning("All accounts reached concurrency limit, selecting account by round-robin")
-        current_time = int(time.time() * 1000)
-        account_index = current_time % len(account_ids)
-        account_id = account_ids[account_index]
-
-        lock_key = f"account_lock:{account_id}"
-        if redis_client.set(lock_key, str(time.time()), nx=True, ex=5):
-            account_key = f"account_pool:{account_id}"
-            account_data = redis_client.hgetall(account_key)
-
-            if not account_data:
-                redis_client.delete(lock_key)
-                redis_client.zrem("available_accounts", account_id)
-                return None
-
-            # 检查账号状态，如果状态不是1，则跳过
-            if account_data.get("status") != "1":
-                
-                redis_client.delete(lock_key)
-                return None
-
-            # 第二轮：即使达到并发限制也使用，不检查 acquire_account
-            redis_client.hset(account_key, "status", "2")
-            logger.warning(f"Using account {account_id} even though concurrency limit may be reached")
-            return account_data
-
+        logger.warning(f"Failed to acquire any account after trying {len(account_info)} accounts")
         return None
 
+      
     except Exception as e:
         logger.error(f"Failed to get account from pool: {e}")
         return await _get_account_from_sqlite()
@@ -480,7 +478,9 @@ async def release_account(account_id: int, success: bool = True, response_time: 
         success: 请求是否成功
         response_time: 响应时间（秒）
     """
+    logger.info(f"Releasing account {account_id}, success={success}")
     if redis_client is None:
+        logger.warning("Redis client is None, cannot release account")
         return
 
     try:
@@ -491,7 +491,10 @@ async def release_account(account_id: int, success: bool = True, response_time: 
         account_key = f"account_pool:{account_id}"        
         # 如果请求成功，将账号状态重置为可用（"1"）
         if success:
+            current_status = redis_client.hget(account_key, "status")
+            
             redis_client.hset(account_key, "status", "1")
+            
             # 更新账号使用信息
             redis_client.hincrby(account_key, "usage_count", 1)
             redis_client.hset(account_key, "last_used_at", str(time.time()))
@@ -518,12 +521,38 @@ async def release_account(account_id: int, success: bool = True, response_time: 
                     if account:
                         account.status = "0"
                         await db.commit()
-                        logger.info(f"Updated account {account_id} status to 0 in Redis and database due to failure")
+                        
             except Exception as db_error:
                 logger.error(f"Failed to update account {account_id} status in database: {db_error}")      
         
     except Exception as e:
         logger.error(f"Failed to release account {account_id}: {e}")
+
+async def health_check():
+    """定期健康检查"""
+    if redis_client is None:
+        return
+
+    try:
+        account_ids = redis_client.keys("account_pool:*")
+
+        for account_id in account_ids:
+            account_key = account_id
+            error_count = int(redis_client.hget(account_key, "error_count") or "0")
+            health_score = int(redis_client.hget(account_key, "health_score") or "0")
+
+            if error_count >= 5 or health_score < 20:
+                redis_client.hset(account_key, "status", "0")
+                redis_client.zrem("available_accounts", account_id.replace("account_pool:", ""))
+                logger.warning(f"Disabled account {account_id} due to poor health")
+            elif health_score > 50 and redis_client.hget(account_key, "status") == "0":
+                redis_client.hset(account_key, "status", "1")
+                redis_client.zadd("available_accounts", {account_id.replace("account_pool:", ""): health_score})
+               
+
+        
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
 
 async def _get_account_from_sqlite() -> Optional[Dict]:
     """从 SQLite 获取账号"""

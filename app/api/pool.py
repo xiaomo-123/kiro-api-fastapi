@@ -3,12 +3,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Dict
 import logging
 
-from ..services.account_pool import (
+from ..services.account_pool_v2 import (
     initialize_pool,
     get_available_account,
     release_account,
     update_account,
-    get_pool_status,
+    get_pool_stats as get_pool_status,
     health_check,
     close_redis
 )
