@@ -44,6 +44,7 @@ services:
       - POSTGRES_MAX_OVERFLOW=10
       - POSTGRES_POOL_RECYCLE=1800
       - POSTGRES_POOL_TIMEOUT=30
+      - PGDATA=/opt/kiro-api-fastapi/postgresql/data
     volumes:
       - /home/kiro-api-fastapi/postgresql:/opt/kiro-api-fastapi/postgresql/data
     restart: unless-stopped
