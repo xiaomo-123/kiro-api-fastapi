@@ -1,0 +1,132 @@
+version: "3.8"
+
+services:
+  redis:
+    networks:
+      - kiro-network
+    image: redis:7-alpine
+    container_name: kiro-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 4000mb --maxmemory-policy allkeys-lru --loglevel verbose --tcp-keepalive 300 --tcp-backlog 511
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: kiro-postgres
+    networks:
+      - kiro-network
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=1234
+      - POSTGRES_DB=postgres      
+      - POSTGRES_SHARED_BUFFERS=256MB
+      - POSTGRES_EFFECTIVE_CACHE_SIZE=1GB
+      - POSTGRES_MAINTENANCE_WORK_MEM=64MB
+      - POSTGRES_WORK_MEM=16MB
+      - POSTGRES_MAX_CONNECTIONS=500
+      # PostgreSQL 连接池配置
+      - POSTGRES_POOL_SIZE=20
+      - POSTGRES_MAX_OVERFLOW=10
+      - POSTGRES_POOL_RECYCLE=1800
+      - POSTGRES_POOL_TIMEOUT=30
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    command: ["postgres", "-c", "max_connections=500", "-c", "shared_buffers=256MB", "-c", "effective_cache_size=1GB", "-c", "maintenance_work_mem=64MB", "-c", "work_mem=16MB", "-c", "checkpoint_completion_target=0.9", "-c", "wal_buffers=16MB", "-c", "default_statistics_target=100", "-c", "random_page_cost=1.1", "-c", "effective_io_concurrency=200", "-c", "work_mem=16MB", "-c", "min_wal_size=1GB", "-c", "max_wal_size=4GB", "-c", "max_worker_processes=4", "-c", "max_parallel_workers_per_gather=2", "-c", "max_parallel_workers=4", "-c", "max_parallel_maintenance_workers=2"]
+
+  app:
+    build: .
+    container_name: kiro-api
+    networks:
+      - kiro-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "5431:5431"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=1234
+      - POSTGRES_DB=postgres
+      # 超时配置 - 统一配置，确保整个链路超时时间一致
+      - PROXY_CONNECT_TIMEOUT=120
+      - PROXY_READ_TIMEOUT=600
+      - PROXY_TOTAL_TIMEOUT=600
+      - QUEUE_MANAGER_TIMEOUT=1200
+      - QUEUE_MANAGER_MAX_WORKERS=500
+      - QUEUE_MANAGER_QUEUE_SIZE=10000
+      - KIRO_SESSION_POOL_SIZE=1000
+      - KIRO_SESSION_LIMIT_PER_HOST=200
+      - KIRO_SESSION_KEEPALIVE_TIMEOUT=60
+      - POOL_SIZE=50
+      # 账号并发控制配置
+      - ACCOUNT_MAX_CONCURRENT=5
+      # Uvicorn配置 - 针对200并发优化
+      - UVICORN_WORKERS=4
+      - UVICORN_HOST=0.0.0.0
+      - UVICORN_PORT=5431
+      - UVICORN_LIMIT_CONCURRENCY=500
+      - UVICORN_TIMEOUT_KEEP_ALIVE=300
+      - UVICORN_BACKLOG=8192
+      # 请求超时配置
+      - REQUEST_TIMEOUT=600
+      - REQUEST_CONNECT_TIMEOUT=30
+      - REQUEST_READ_TIMEOUT=570
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  redis_data:
+    name: kiro-api-fastapi_redis_data
+    driver: local
+  postgres_data:
+    name: kiro-api-fastapi_postgres_data
+    driver: local
+
+networks:
+  kiro-network:
+    driver: bridge

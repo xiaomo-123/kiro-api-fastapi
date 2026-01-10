@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+        }
+
+        .header {
+            background: #667eea;
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+        }
+
+        .header .user-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header .user-info span {
+            font-size: 16px;
+        }
+
+        .header .btn-logout {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .header .btn-logout:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .container {
+            display: flex;
+            min-height: calc(100vh - 70px);
+        }
+
+        .sidebar {
+            width: 250px;
+            background: white;
+            padding: 20px 0;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar ul {
+            list-style: none;
+        }
+
+        .sidebar li {
+            padding: 15px 20px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .sidebar li:hover {
+            background: #f0f0f0;
+        }
+
+        .sidebar li.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            padding: 30px;
+        }
+
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        .page-header {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .page-header h2 {
+            color: #333;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .filter-group label {
+            font-weight: 500;
+            color: #555;
+        }
+
+        .filter-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            min-width: 120px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-add {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn-add:hover {
+            background: #5568d3;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+            word-wrap: break-word;
+        }
+
+        /* 复选框列样式 */
+        th:first-child, td:first-child {
+            width: 50px;
+            text-align: center;
+            padding: 15px 10px;
+        }
+
+        th:first-child input[type="checkbox"],
+        td:first-child input[type="checkbox"] {
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        /* 账号列样式 */
+        .account-cell {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: block;
+        }
+
+        /* 代理表格操作列样式 */
+        #proxies-table th:last-child,
+        #proxies-table td:last-child {
+            width: 150px;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .btn-edit {
+            padding: 5px 10px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+
+        .btn-delete {
+            padding: 5px 10px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        /* 分页控件样式 */
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: white;
+            margin-top: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .pagination-info {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .pagination-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-pagination {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn-pagination:hover:not(:disabled) {
+            background: #5568d3;
+        }
+
+        .btn-pagination:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        /* 模态框样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .btn-cancel {
+            padding: 10px 20px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .btn-save {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        /* 消息提示样式 */
+        #message-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+
+        .message {
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            animation: slideIn 0.3s ease;
+            max-width: 400px;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+        }
+
+        .message.warning {
+            background: #fff3cd;
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+
+        .message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-left: 4px solid #17a2b8;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+            }
+            to {
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>管理系统</h1>
+        <div class="user-info">
+            <span id="username"></span>
+            <button class="btn-logout" onclick="logout()">退出登录</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <ul>
+                <li onclick="showPage('users')" class="active">用户管理</li>
+                <li onclick="showPage('accounts')">账号管理</li>
+                <li onclick="showPage('apikeys')">API Key管理</li>
+                <li onclick="showPage('proxies')">代理管理</li>
+            </ul>
+        </div>
+
+        <div class="content">
+            <!-- 用户管理页面 -->
+            <div id="page-users" class="page active">
+                <div class="page-header">
+                    <h2>用户管理</h2>
+                    <button class="btn-add" onclick="openModal('users')">添加用户</button>
+                </div>
+                <div class="table-container">
+                    <table id="users-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>用户名</th>
+                                <th>描述</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 账号管理页面 -->
+            <div id="page-accounts" class="page">
+                <div class="page-header">
+                    <h2>账号管理</h2>
+                    <div class="header-actions">
+                        <div class="filter-group">
+                            <label for="account-status-filter">状态筛选:</label>
+                            <select id="account-status-filter" onchange="filterAccountsByStatus()">
+                                <option value="">全部</option>
+                                <option value="1">启用</option>
+                                <option value="0">禁用</option>
+                            </select>
+                        </div>
+                        <div class="action-buttons">
+                            <input type="file" id="import-file" accept=".json" style="display: none;" onchange="importAccounts(this)">
+                            <button class="btn-add" onclick="document.getElementById('import-file').click()">导入JSON</button>
+                            <button class="btn-add" onclick="exportAccounts()">导出JSON</button>
+                            <button class="btn-add" onclick="openModal('accounts')">添加账号</button>
+                            <button class="btn-delete" onclick="deleteSelectedAccounts()">批量删除</button>
+                            <button class="btn-delete" onclick="deleteAllAccounts()">全部删除</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="accounts-table">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="select-all-accounts" onchange="toggleAllAccounts(this)"></th>
+                                <th>ID</th>
+                                <th>账号</th>
+                                <th>状态</th>
+                                <th>描述</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <!-- 分页控件 -->
+                <div id="accounts-pagination" class="pagination-container"></div>
+            </div>
+
+            <!-- API Key管理页面 -->
+            <div id="page-apikeys" class="page">
+                <div class="page-header">
+                    <h2>API Key管理</h2>
+                    <button class="btn-add" onclick="openModal('apikeys')">添加API Key</button>
+                </div>
+                <div class="table-container">
+                    <table id="apikeys-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>API Key</th>
+                                <th>描述</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 代理管理页面 -->
+            <div id="page-proxies" class="page">
+                <div class="page-header">
+                    <h2>代理管理</h2>
+                    <button class="btn-add" onclick="openModal('proxies')">添加代理</button>
+                </div>
+                <div class="table-container">
+                    <table id="proxies-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>类型</th>
+                                <th>URL</th>
+                                <th>端口</th>
+                                <th>用户名</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户模态框 -->
+    <div id="modal-users" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-users-title">添加用户</h3>
+            </div>
+            <form id="form-users">
+                <input type="hidden" id="users-id">
+                <div class="form-group">
+                    <label for="users-username">用户名</label>
+                    <input type="text" id="users-username" required>
+                </div>
+                <div class="form-group">
+                    <label for="users-password">密码</label>
+                    <input type="password" id="users-password">
+                </div>
+                <div class="form-group">
+                    <label for="users-description">描述</label>
+                    <textarea id="users-description"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" onclick="closeModal('users')">取消</button>
+                    <button type="submit" class="btn-save">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 账号模态框 -->
+    <div id="modal-accounts" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-accounts-title">添加账号</h3>
+            </div>
+            <form id="form-accounts">
+                <input type="hidden" id="accounts-id">
+                <div class="form-group">
+                    <label for="accounts-account">账号</label>
+                    <textarea id="accounts-account" rows="10" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="accounts-status">状态</label>
+                    <select id="accounts-status">
+                        <option value="1">启用</option>
+                        <option value="0">禁用</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="accounts-description">描述</label>
+                    <textarea id="accounts-description"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" onclick="closeModal('accounts')">取消</button>
+                    <button type="submit" class="btn-save">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- API Key模态框 -->
+    <div id="modal-apikeys" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-apikeys-title">添加API Key</h3>
+            </div>
+            <form id="form-apikeys">
+                <input type="hidden" id="apikeys-id">
+                <div class="form-group">
+                    <label for="apikeys-api_key">API Key</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="apikeys-api_key" required>
+                        <button type="button" class="btn-add" onclick="generateApiKey()">生成Key</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="apikeys-description">描述</label>
+                    <textarea id="apikeys-description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="apikeys-status">状态</label>
+                    <select id="apikeys-status">
+                        <option value="1">启用</option>
+                        <option value="0">禁用</option>
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" onclick="closeModal('apikeys')">取消</button>
+                    <button type="submit" class="btn-save">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 代理模态框 -->
+    <div id="modal-proxies" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-proxies-title">添加代理</h3>
+            </div>
+            <form id="form-proxies">
+                <input type="hidden" id="proxies-id">
+                <div class="form-group">
+                    <label for="proxies-proxy_type">代理类型</label>
+                    <select id="proxies-proxy_type">
+                        <option value="http">HTTP</option>
+                        <option value="https">HTTPS</option>
+                        <option value="socks5">SOCKS5</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="proxies-proxy_url">代理URL</label>
+                    <input type="text" id="proxies-proxy_url" required>
+                </div>
+                <div class="form-group">
+                    <label for="proxies-proxy_port">端口</label>
+                    <input type="number" id="proxies-proxy_port">
+                </div>
+                <div class="form-group">
+                    <label for="proxies-username">用户名</label>
+                    <input type="text" id="proxies-username">
+                </div>
+                <div class="form-group">
+                    <label for="proxies-password">密码</label>
+                    <input type="password" id="proxies-password">
+                </div>
+                <div class="form-group">
+                    <label for="proxies-status">状态</label>
+                    <select id="proxies-status" name="status">
+                        <option value="1">启用</option>
+                        <option value="0">禁用</option>
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" onclick="closeModal('proxies')">取消</button>
+                    <button type="submit" class="btn-save">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="js/message.js"></script>
+    <script type="module" src="js/index.js"></script>
+    <script type="module" src="js/users.js"></script>
+    <script type="module" src="js/accounts.js"></script>
+    <script type="module" src="js/apikeys.js"></script>
+    <script type="module" src="js/proxies.js"></script>
+
+    <!-- 消息提示容器 -->
+    <div id="message-container"></div>
+</body>
+</html>
