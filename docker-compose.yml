@@ -45,7 +45,7 @@ services:
       - POSTGRES_POOL_RECYCLE=1800
       - POSTGRES_POOL_TIMEOUT=30
     volumes:
-      - postgres_data:/opt/kiro-api-fastapi/postgresql/data
+      - /home/kiro-api-fastapi/postgresql:/opt/kiro-api-fastapi/postgresql/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
@@ -123,9 +123,9 @@ volumes:
   redis_data:
     name: kiro-api-fastapi_redis_data
     driver: local
-  postgres_data:
-    name: kiro-api-fastapi_postgres_data
-    driver: local
+  # postgres_data:
+    # name: kiro-api-fastapi_postgres_data
+    # driver: local
 
 networks:
   kiro-network:
