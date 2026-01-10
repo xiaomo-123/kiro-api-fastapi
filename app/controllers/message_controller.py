@@ -209,7 +209,7 @@ class MessageController:
                             error_msg = error_msg.get('message', str(error_msg))
                         
                         # 判断错误类型并返回适当的 HTTP 状态码
-                        if '403' in str(error_msg) or 'Forbidden' in str(error_msg):
+                        if error_msg == "403":
                             # 处理403错误：禁用账号、停止实例、切换账号
                             current_account_id = kiro_service.current_account_id
                             logger.error(f'[MessageController] 非流式 Received 403 error for account {current_account_id}, disabling account and switching')
@@ -273,7 +273,7 @@ class MessageController:
                                     new_account_id = kiro_service.current_account_id
                                     from app.services.account_concurrency_manager import release_account as release_concurrency
                                     await release_concurrency(new_account_id, force=True)
-                                    logger.info(f'[MessageController] 流式 new account {new_account_id} due to 403 error')
+                                    logger.info(f'[MessageController] 非流式 new account {new_account_id} due to 403 error')
                                    
                                     # 直接返回503错误响应，不抛出异常
                                     return JSONResponse(
@@ -292,10 +292,10 @@ class MessageController:
 
                             # 9. 返回新实例的响应
                             return JSONResponse(content=response)
-                        elif '429' in str(error_msg) or 'Too many requests' in str(error_msg):
+                        elif error_msg == "429":
                             # 处理429错误：停止实例、切换账号和实例（不禁用账号）
                             current_account_id = kiro_service.current_account_id
-                            logger.error(f'[MessageController] 流式  429 error for account {current_account_id}, switching account and instance (not disabling account)')
+                            logger.error(f'[MessageController] 非流式  429 error for account {current_account_id}, switching account and instance (not disabling account)')
 
                             # 1. 停止当前实例
                             await kiro_service.close()
@@ -336,7 +336,7 @@ class MessageController:
                                     new_error_msg = new_error_msg.get('message', str(new_error_msg))
 
                                 # 如果新实例仍然返回429，则直接返回429状态码
-                                if '429' in str(new_error_msg) or 'Too many requests' in str(new_error_msg):
+                                if new_error_msg == "429":
                                     # 释放新账号的并发计数器
                                     new_account_id = kiro_service.current_account_id
                                     from app.services.account_concurrency_manager import release_account as release_concurrency
@@ -610,7 +610,7 @@ class MessageController:
                                         new_error_msg = new_error_msg.get('message', str(new_error_msg))
 
                                     # 如果新实例仍然返回429，则直接返回429状态码
-                                    if '429' in str(new_error_msg) or 'Too many requests' in str(new_error_msg):  # 字符串包含
+                                    if new_error_msg == "429" and 'account_id' in new_event:
                                         # 释放新账号的并发计数器
                                         new_account_id = kiro_service.current_account_id
                                         from app.services.account_concurrency_manager import release_account as release_concurrency

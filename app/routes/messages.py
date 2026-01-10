@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import ClaudeMessageRequest, ErrorResponse
 from ..controllers.message_controller import get_message_controller
 from ..config import settings
-from .redis_queue_manager import get_queue_manager
 
 router = APIRouter()
 
@@ -53,32 +52,18 @@ async def create_message(
 
     优化：
     - 流式请求直接处理，保持实时性
-    - 非流式请求使用 Redis 队列管理，支持高并发
     """
     # 获取消息控制器
     controller = get_message_controller()
 
-    # 流式请求直接处理，非流式请求通过队列
-    if body.stream:
-        # 流式请求直接处理，避免队列延迟
-        # 为流式响应添加更长的超时配置
-        from fastapi.responses import StreamingResponse
-        response = await controller.handle_message(request, body)
-        if isinstance(response, StreamingResponse):
-            # 确保流式响应有正确的超时配置
-            response.headers['X-Accel-Buffering'] = 'no'  # 禁用nginx缓冲
-            response.headers['Cache-Control'] = 'no-cache, no-transform'
-        return response
-    else:
-        # 非流式请求通过队列管理
-        queue_manager = get_queue_manager()
-        request_data = {'body': body}
-        result = await queue_manager.submit_request(request_data)
-        return result
+    # 所有请求直接处理，不使用队列
+    from fastapi.responses import StreamingResponse
+    response = await controller.handle_message(request, body)
+    if isinstance(response, StreamingResponse):
+        # 确保流式响应有正确的超时配置
+        response.headers['X-Accel-Buffering'] = 'no'  # 禁用nginx缓冲
+        response.headers['Cache-Control'] = 'no-cache, no-transform'
+    return response
 
 
-@router.get('/queue/health')
-async def get_queue_health():
-    """获取队列健康状态"""
-    queue_manager = get_queue_manager()
-    return await queue_manager.get_queue_health()
+

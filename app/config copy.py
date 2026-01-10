@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     KIRO_SESSION_KEEPALIVE_TIMEOUT: int = 120  # 保持连接时间（秒）- 增加以适应慢响应
 
     # Redis 配置
-    REDIS_HOST: str = "192.168.1.12"
+    REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     REDIS_PASSWORD: Optional[str] = None
@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     POSTGRES_POOL_TIMEOUT: int = 30
 
     # 账号池配置
-    POOL_SIZE: int = 1
+    POOL_SIZE: int = 4
     ACCOUNT_TIMEOUT: int = 30
     HEALTH_CHECK_INTERVAL: int = 300
 

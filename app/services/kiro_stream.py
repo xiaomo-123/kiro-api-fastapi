@@ -553,6 +553,17 @@ class KiroStreamService(KiroBaseService):
 
             try:
                 async for event in self._stream_api_real('', model, request_body):
+                    # 处理错误事件
+                    if 'error' in event:
+                        error_msg = event.get('error', '')
+                        # 如果是403或429错误，直接传递错误事件
+                        if error_msg == "403" or error_msg == "429":
+                            yield event
+                            return
+                        # 其他错误也传递
+                        yield event
+                        return
+                    
                     if event.get('type') == 'content' and 'content' in event:
                         current_content = event['content']
                         # 修复：计算增量而非全量对比（避免重复过滤）
