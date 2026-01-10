@@ -45,7 +45,7 @@ services:
       - POSTGRES_POOL_RECYCLE=1800
       - POSTGRES_POOL_TIMEOUT=30
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/opt/kiro-api-fastapi/postgresql/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
