@@ -146,16 +146,14 @@ class AccountPoolReloader:
                         else:
                             # Redis中已存在，检查状态
                             redis_status = redis_account_status.get(account_id_str)
-                            if redis_status == "0":
-                                # Redis中状态为0，从Redis和数据库中清除
+
+                            # 如果数据库中状态为0，或者Redis中状态为0，则从Redis中清除
+                            if db_account.status == "0" or redis_status == "0":
                                 pipe.delete(account_key)
                                 pipe.zrem("available_accounts", account_id_str)
                                 pipe.delete(f"account_lock:{account_id_str}")
-
-                                # 更新数据库状态为0
-                                db_account.status = "0"
                                 removed_count += 1
-                                logger.info(f"Removed account {account_id_str} (status=0) from pool and database")
+                                logger.info(f"Removed account {account_id_str} (db_status={db_account.status}, redis_status={redis_status}) from pool")
 
                     # 检查Redis中是否存在数据库中不存在的账号
                     for redis_id in redis_account_ids:
@@ -204,7 +202,16 @@ def init_redis():
             )
             redis_client = redis.Redis(connection_pool=redis_pool)
             redis_client.ping()
-            logger.info("Redis connected successfully")
+
+            # 测试写入权限
+            test_key = "redis_write_test"
+            redis_client.set(test_key, "1", ex=1)
+            redis_client.delete(test_key)
+
+            logger.info("Redis connected successfully with write permission")
+        except redis.exceptions.ReadOnlyError:
+            logger.error("Redis is in read-only mode. Please check Redis configuration and ensure you're connecting to the master node, not a replica.")
+            redis_client = None
         except Exception as e:
             logger.warning(f"Redis connection failed: {e}, falling back to SQLite only mode")
             redis_client = None
@@ -225,46 +232,38 @@ async def initialize_pool():
         init_lock_acquired = redis_client.set(init_lock_key, "1", nx=True, ex=30)
 
         if not init_lock_acquired:
-            logger.info("Account pool initialization already in progress, waiting...")
+            
             # 等待初始化完成
             for _ in range(30):  # 最多等待3秒
-                if not redis_client.exists(init_lock_key):
-                    logger.info("Account pool initialization completed")
+                if not redis_client.exists(init_lock_key):                   
                     return
                 await asyncio.sleep(0.1)
-            logger.warning("Account pool initialization timeout, using existing pool")
+            
             return
 
         try:
-            # 检查是否已经初始化过
-            existing_count = redis_client.zcard("available_accounts")
-            if existing_count > 0:
-                logger.info(f"Account pool already initialized with {existing_count} accounts")
-            else:
-                # 先清空所有账号数据
-                account_keys = redis_client.keys("account_pool:*")
-                if account_keys:
-                    redis_client.delete(*account_keys)
-                redis_client.delete("available_accounts")
-                logger.info(f"Cleared {len(account_keys) if account_keys else 0} existing accounts from pool")
+            # 先清空所有账号数据
+            account_keys = redis_client.keys("account_pool:*")
+            if account_keys:
+                redis_client.delete(*account_keys)
+            redis_client.delete("available_accounts")
+            logger.info(f"Cleared {len(account_keys) if account_keys else 0} existing accounts from pool")
 
-                # 从数据库加载账号数据
-                async with AsyncSessionLocal() as db:
+            # 从数据库加载账号数据
+            async with AsyncSessionLocal() as db:
                     stmt = select(Account).filter(Account.status == "1")
                     result = await db.execute(stmt)
                     accounts = result.scalars().all()
 
-                    logger.info(f"Found {len(accounts)} enabled accounts in database")
+                    
 
                     if not accounts:
                         logger.warning("No enabled accounts found in database")
-                        logger.info("Please add accounts using the management interface or init_accounts.py")
-                        # 不再return，继续启动重载器
-                        # return
+                        
 
                     # 记录账号详情（不包含敏感信息）
-                    for account in accounts:
-                        logger.info(f"Account ID: {account.id}, Status: {account.status}, Description: {account.description}")
+                    # for account in accounts:
+                    #     logger.info(f"Account ID: {account.id}, Status: {account.status}, Description: {account.description}")
 
                     # 使用批量操作提高性能
                     pipe = redis_client.pipeline()
@@ -354,7 +353,7 @@ async def get_available_account() -> Optional[Dict]:
 
         # 按得分排序
         account_info.sort(key=lambda x: x['score'], reverse=True)
-        logger.debug(f"Account ranking: {[(a['account_id'], a['score'], a['is_new']) for a in account_info]}")
+        # logger.debug(f"Account ranking: {[(a['account_id'], a['score'], a['is_new']) for a in account_info]}")
 
         # 第一轮：尝试从得分高的账号开始
         for info in account_info:
@@ -374,9 +373,9 @@ async def get_available_account() -> Optional[Dict]:
                     continue
 
                 if account_data.get("status") != "1":
-                    logger.warning(f"Account {account_id} status is {account_data.get('status')}, attempting to reset")
-                    redis_client.hset(account_key, "status", "1")
-                    account_data["status"] = "1"
+                    logger.warning(f"Account {account_id} status is {account_data.get('status')}, skipping")
+                    redis_client.delete(lock_key)
+                    continue
 
                 # 检查账号并发限制
                 acquired = await acquire_account(int(account_id), max_concurrent)
@@ -387,7 +386,7 @@ async def get_available_account() -> Optional[Dict]:
 
                 # 成功获取账号
                 redis_client.hset(account_key, "status", "2")
-                logger.debug(f"Got account {account_id} from pool (new={info['is_new']}, concurrency: {concurrency})")
+                # logger.debug(f"Got account {account_id} from pool (new={info['is_new']}, concurrency: {concurrency})")
                 return account_data
 
         # 第二轮：如果所有账号都达到并发限制，使用轮询方式选择一个账号（即使达到限制也使用）
@@ -406,9 +405,11 @@ async def get_available_account() -> Optional[Dict]:
                 redis_client.zrem("available_accounts", account_id)
                 return None
 
+            # 检查账号状态，如果状态不是1，则跳过
             if account_data.get("status") != "1":
-                redis_client.hset(account_key, "status", "1")
-                account_data["status"] = "1"
+                
+                redis_client.delete(lock_key)
+                return None
 
             # 第二轮：即使达到并发限制也使用，不检查 acquire_account
             redis_client.hset(account_key, "status", "2")
@@ -459,7 +460,7 @@ async def update_account(account_id: int, account_data: Optional[str] = None, st
                 if description is not None:
                     redis_client.hset(account_key, "description", description)
 
-            logger.info(f"Updated account {account_id}")
+            
             return {
                 "id": str(account.id),
                 "account": account.account,
@@ -501,7 +502,25 @@ async def release_account(account_id: int, success: bool = True, response_time: 
         else:
             # 请求失败，增加错误计数
             redis_client.hincrby(account_key, "error_count", 1)
-            redis_client.hset(account_key, "last_error_time", str(time.time()))      
+            redis_client.hset(account_key, "last_error_time", str(time.time()))
+
+            # 将Redis中账号状态设置为0
+            redis_client.hset(account_key, "status", "0")
+            redis_client.zrem("available_accounts", str(account_id))
+
+            # 将数据库中账号状态设置为0
+            try:
+                async with AsyncSessionLocal() as db:
+                    stmt = select(Account).filter(Account.id == account_id)
+                    result = await db.execute(stmt)
+                    account = result.scalars().first()
+
+                    if account:
+                        account.status = "0"
+                        await db.commit()
+                        logger.info(f"Updated account {account_id} status to 0 in Redis and database due to failure")
+            except Exception as db_error:
+                logger.error(f"Failed to update account {account_id} status in database: {db_error}")      
         
     except Exception as e:
         logger.error(f"Failed to release account {account_id}: {e}")

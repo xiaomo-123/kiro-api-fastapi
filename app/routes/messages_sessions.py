@@ -25,7 +25,7 @@ async def verify_api_key(x_api_key: Optional[str] = Header(None, alias="X-Api-Ke
 
 
 @router.post(
-    '/claude-kiro-oauth/v1/messages-api',
+    '/claude-kiro-oauth/v1/mmessages',
     response_model=None,
     tags=['会话消息']
 )

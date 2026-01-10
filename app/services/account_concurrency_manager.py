@@ -110,6 +110,24 @@ async def release_account(account_id: int, force: bool = False):
         # 记录释放操作，便于调试
         logger.info(f"Account {account_id} concurrency released (force={force})")
 
+        # 将账号数据表中account_id的状态设置为0
+        try:
+            from ..db.database import AsyncSessionLocal
+            from ..db.models import Account
+            from sqlalchemy import select
+
+            async with AsyncSessionLocal() as db:
+                stmt = select(Account).filter(Account.id == account_id)
+                result = await db.execute(stmt)
+                account = result.scalars().first()
+
+                if account:
+                    account.status = "0"
+                    await db.commit()
+                    logger.info(f"Updated account {account_id} status to 0 in database")
+        except Exception as db_error:
+            logger.error(f"Failed to update account {account_id} status in database: {db_error}")
+
     except Exception as e:
         logger.error(f"Failed to release account {account_id}: {e}")
 

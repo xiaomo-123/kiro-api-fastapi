@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     POSTGRES_POOL_TIMEOUT: int = 30
 
     # 账号池配置
-    POOL_SIZE: int = 1
+    POOL_SIZE: int = 4
     ACCOUNT_TIMEOUT: int = 30
     HEALTH_CHECK_INTERVAL: int = 300
 

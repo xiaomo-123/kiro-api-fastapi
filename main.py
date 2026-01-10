@@ -62,32 +62,32 @@ async def lifespan(app: FastAPI):
     is_main_worker = os.environ.get('WORKER_ID') is None or os.environ.get('WORKER_ID') == '0'
     
     if is_main_worker:
-        logger.info('Main worker detected, initializing shared resources...')
+        
         
         # 初始化账号池
         await initialize_pool()
-        logger.info('Account pool initialized')
+        
 
         # 初始化API Key管理服务
         init_apikey_redis()
         await load_apikeys_to_redis()
-        logger.info('API Key manager initialized')
+       
 
-        # 启动账号重载器
+        # 定时清理账号池
         if account_pool_reloader is None:
             account_pool_reloader = AccountPoolReloader(reload_interval=60)
             await account_pool_reloader.start()
-            logger.info('Account pool reloader started')
+           
         
 
         # 初始化代理池
         await initialize_proxy_pool()
-        logger.info('Proxy pool initialized')
+        
 
         # 初始化代理健康检查服务
         proxy_health_checker = ProxyHealthChecker(check_interval=30)
         await proxy_health_checker.start_health_check_loop()
-        logger.info('Proxy health checker started')
+        
 
         # 初始化Kiro服务池
         from app.services.kiro_service_new import get_kiro_service
@@ -99,7 +99,7 @@ async def lifespan(app: FastAPI):
         # 初始化并启动心跳服务
         heartbeat_service.init_app(app)
         heartbeat_service.start()
-        logger.info('Heartbeat service started')
+        
     else:
         logger.info(f'Worker {os.environ.get("WORKER_ID")} detected, skipping shared resource initialization')
 
@@ -174,7 +174,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # 注册路由
 app.include_router(messages_router)
-app.include_router(messages_sessions_router, prefix="/api")
+app.include_router(messages_sessions_router)
 app.include_router(management_router, prefix="/api/management", tags=["管理"])
 app.include_router(pool_router, prefix="/api/pool", tags=["账号池"])
 app.include_router(monitoring_router, prefix="/api/monitoring", tags=["监控"])

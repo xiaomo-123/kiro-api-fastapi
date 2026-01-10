@@ -212,31 +212,31 @@ class MessageController:
                         if '403' in str(error_msg) or 'Forbidden' in str(error_msg):
                             # 处理403错误：禁用账号、停止实例、切换账号
                             current_account_id = kiro_service.current_account_id
-                            logger.error(f'[MessageController] Received 403 error for account {current_account_id}, disabling account and switching')
+                            logger.error(f'[MessageController] 非流式 Received 403 error for account {current_account_id}, disabling account and switching')
 
                             # 1. 释放旧账号的并发计数
                             from app.services.account_concurrency_manager import release_account as release_concurrency
                             await release_concurrency(current_account_id, force=True)
-                            logger.info(f'[MessageController] Released concurrency for account {current_account_id}')
+                            logger.info(f'[MessageController] 非流式 Released concurrency for account {current_account_id}')
 
                             # 2. 禁用当前账号
                             disable_result = await kiro_service._disable_current_account()
                             if disable_result:
-                                logger.info(f'[MessageController] Successfully disabled account {current_account_id}')
+                                logger.info(f'[MessageController] 非流式 Successfully disabled account {current_account_id}')
                             else:
                                 logger.error(f'[MessageController] Failed to disable account {current_account_id}')
 
                             # 3. 停止当前实例
                             await kiro_service.close()
-                            logger.info(f'[MessageController] Closed service instance for account {current_account_id}')
+                           
 
                             # 4. 切换到下一个账号
                             switch_result = await kiro_service._switch_to_next_account()
                             new_account_id = kiro_service.current_account_id
-                            if switch_result:
-                                logger.info(f'[MessageController] Successfully switched from account {current_account_id} to account {new_account_id}')
-                            else:
-                                logger.error(f'[MessageController] Failed to switch from account {current_account_id}')
+                            # if switch_result:
+                            #     logger.info(f'[MessageController] Successfully switched from account {current_account_id} to account {new_account_id}')
+                            # else:
+                            #     logger.error(f'[MessageController] Failed to switch from account {current_account_id}')
 
                             # 5. 释放当前服务实例
                             await kiro_pool.release_service(kiro_service)
@@ -273,8 +273,8 @@ class MessageController:
                                     new_account_id = kiro_service.current_account_id
                                     from app.services.account_concurrency_manager import release_account as release_concurrency
                                     await release_concurrency(new_account_id, force=True)
-                                    logger.info(f'[MessageController] Released concurrency for new account {new_account_id} due to 403 error')
-                                    logger.error(f'[MessageController] All accounts failed with 403 error, returning 503 Service Unavailable')
+                                    logger.info(f'[MessageController] 流式 new account {new_account_id} due to 403 error')
+                                   
                                     # 直接返回503错误响应，不抛出异常
                                     return JSONResponse(
                                         status_code=503,
@@ -295,19 +295,16 @@ class MessageController:
                         elif '429' in str(error_msg) or 'Too many requests' in str(error_msg):
                             # 处理429错误：停止实例、切换账号和实例（不禁用账号）
                             current_account_id = kiro_service.current_account_id
-                            logger.error(f'[MessageController] Received 429 error for account {current_account_id}, switching account and instance (not disabling account)')
+                            logger.error(f'[MessageController] 流式  429 error for account {current_account_id}, switching account and instance (not disabling account)')
 
                             # 1. 停止当前实例
                             await kiro_service.close()
-                            logger.info(f'[MessageController] Closed service instance for account {current_account_id}')
+                            
 
                             # 2. 切换到下一个账号
                             switch_result = await kiro_service._switch_to_next_account()
                             new_account_id = kiro_service.current_account_id
-                            if switch_result:
-                                logger.info(f'[MessageController] Successfully switched from account {current_account_id} to account {new_account_id}')
-                            else:
-                                logger.error(f'[MessageController] Failed to switch from account {current_account_id}')
+                            #
 
                             # 3. 释放当前服务实例
                             await kiro_pool.release_service(kiro_service)
